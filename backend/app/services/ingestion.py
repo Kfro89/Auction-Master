@@ -90,6 +90,12 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     except Exception as e:
                         logger.warning(f"Failed to parse date {end_time_str}: {e}")
 
+                # Extract Image URL
+                primary_image = lot.get('primary_image') or lot.get('primaryImage', {})
+                image_url = None
+                if isinstance(primary_image, dict):
+                    image_url = primary_image.get('small') or primary_image.get('thumb') or primary_image.get('url')
+
                 # 2. Check if user is bidding
                 is_user_bidding = False
                 if lot.get('isHighBidder') is True:
@@ -111,6 +117,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                         end_time=end_time,
                         status=str(lot.get('status', 'open')).lower(),
                         url=f"{base_url}/auctions/{ext_id}/lot/{lot_ext_id}",
+                        image_url=image_url,
                         first_seen_at=datetime.now(timezone.utc),
                         last_seen_at=datetime.now(timezone.utc),
                         is_user_bidding=is_user_bidding
@@ -122,6 +129,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     item.bid_count = lot.get('bidCount') or lot.get('bid_count', 0)
                     item.end_time = end_time
                     item.status = str(lot.get('status', 'open')).lower()
+                    item.image_url = image_url
                     item.last_seen_at = datetime.now(timezone.utc)
                     item.is_user_bidding = is_user_bidding
                     items_count += 1
