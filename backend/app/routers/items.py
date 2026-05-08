@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from ..database import get_db
 from ..models import Item, Valuation
+from ..auth import get_current_user
 
 router = APIRouter()
 
 @router.get("/")
-async def list_items(db: Session = Depends(get_db)):
+async def list_items(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     # Fetch items with their valuations
     items = db.query(Item).options(joinedload(Item.valuation)).order_by(Item.end_time.asc()).limit(100).all()
     

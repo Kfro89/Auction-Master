@@ -12,6 +12,7 @@ from ..models import InventoryItem, Item
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.drafting import generate_ebay_draft
+from ..auth import get_current_user
 
 router = APIRouter()
 
@@ -29,11 +30,11 @@ class InventoryItemUpdate(BaseModel):
     images: Optional[List[str]] = None
 
 @router.get("/")
-async def list_inventory(db: Session = Depends(get_db)):
+async def list_inventory(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     return db.query(InventoryItem).order_by(InventoryItem.created_at.desc()).all()
 
 @router.post("/scan")
-async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db)):
+async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     barcode = request.barcode
     
     # 1. Check existing inventory
@@ -97,7 +98,7 @@ async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db)):
     return new_item
 
 @router.patch("/{id}")
-async def update_inventory_item(id: int, update_data: InventoryItemUpdate, db: Session = Depends(get_db)):
+async def update_inventory_item(id: int, update_data: InventoryItemUpdate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
@@ -111,7 +112,7 @@ async def update_inventory_item(id: int, update_data: InventoryItemUpdate, db: S
     return item
 
 @router.post("/{id}/draft")
-async def draft_item(id: int, db: Session = Depends(get_db)):
+async def draft_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
