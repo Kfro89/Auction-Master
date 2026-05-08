@@ -339,6 +339,12 @@ const ResearchView: React.FC = () => {
       <Modal isOpen={!!selectedImage} onClose={() => setSelectedImage(null)} size="lg">
         {selectedImage && <img src={selectedImage} alt="Enlarged view" className="lightbox-img" />}
       </Modal>
+    </div>
+  );
+};
+
+export default ResearchView;Image} alt="Enlarged view" className="lightbox-img" />}
+      </Modal>
 
       <Modal isOpen={!!selectedUrl} onClose={() => setSelectedUrl(null)} size="full">
         {selectedUrl && <iframe src={selectedUrl} className="iframe-modal" title="Auction Page" />}
