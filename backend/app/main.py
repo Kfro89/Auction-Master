@@ -8,6 +8,7 @@ from . import models
 
 from .routers import admin, items, inventory
 from .services.valuation_worker import process_pending_valuations
+from .services.ingestion import ingest_auctioneer_software
 from .database import SessionLocal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -20,14 +21,20 @@ app.include_router(inventory.router, prefix="/api/inventory", tags=["inventory"]
 @app.on_event("startup")
 async def start_scheduler():
     scheduler = AsyncIOScheduler()
-    async def valuation_job():
+    async def sweep_and_valuate_job():
         db = SessionLocal()
         try:
+            print("Starting background sweep and valuate job...")
+            await ingest_auctioneer_software(db, "https://www.whitleyauction.com", "rmeb", "Whitley Auction", 18.5)
+            await ingest_auctioneer_software(db, "https://bid.rollerauction.com", "rol", "Roller Auction", 13.0)
             await process_pending_valuations(db)
+            print("Finished background sweep and valuate job.")
+        except Exception as e:
+            print(f"Error in background job: {e}")
         finally:
             db.close()
 
-    scheduler.add_job(valuation_job, "interval", seconds=60)
+    scheduler.add_job(sweep_and_valuate_job, "interval", minutes=60)
     scheduler.start()
     print("Background valuation scheduler started.")
 
