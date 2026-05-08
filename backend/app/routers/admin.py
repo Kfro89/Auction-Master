@@ -49,8 +49,11 @@ async def valuate_item(item_id: int, db: Session = Depends(get_db)):
 
     query = item.title[:50]
 
-    client_id = os.environ.get("EBAY_CLIENT_ID", "dummy")
-    client_secret = os.environ.get("EBAY_CLIENT_SECRET", "dummy")
+    client_id = os.environ.get("EBAY_CLIENT_ID")
+    client_secret = os.environ.get("EBAY_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="eBay credentials not configured")
     
     auth_client = EbayAuthClient(client_id=client_id, client_secret=client_secret)
     browse_client = EbayBrowseClient(auth_client=auth_client)
