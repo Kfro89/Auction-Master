@@ -25,8 +25,8 @@ Automated market analysis and ROI calculation:
 - **[superpowers/specs/2026-05-08-valuation-engine-design.md](./superpowers/specs/2026-05-08-valuation-engine-design.md)**: Design specification.
 - **[superpowers/plans/2026-05-08-ebay-valuation-engine.md](./superpowers/plans/2026-05-08-ebay-valuation-engine.md)** & **[superpowers/plans/2026-05-08-valuation-engine.md](./superpowers/plans/2026-05-08-valuation-engine.md)**: Implementation plans.
 
-## 🖥 Phase 4-6: ERP Suite & Frontend (Complete)
-Designs and implementation plans for the comprehensive web interface, staging workflows, and analytics:
+## 🖥 Phase 4-7: ERP Suite & Production Readiness (Complete)
+Designs and implementation plans for the comprehensive web interface, staging workflows, analytics, and production readiness:
 - **[superpowers/specs/2026-05-08-auction-master-erp-design.md](./superpowers/specs/2026-05-08-auction-master-erp-design.md)**: Overarching architectural design for the multi-tab ERP suite.
 - **[superpowers/specs/2026-05-08-frontend-dashboard-design.md](./superpowers/specs/2026-05-08-frontend-dashboard-design.md)**: Initial dashboard design.
 - **[superpowers/plans/2026-05-08-glass-shell-layout.md](./superpowers/plans/2026-05-08-glass-shell-layout.md)**: Phase 4.1 Plan.
