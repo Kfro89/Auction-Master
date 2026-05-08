@@ -76,3 +76,27 @@ class ConditionMap(Base):
     auction_house_id = Column(Integer, ForeignKey("auction_houses.id"), nullable=False)
     raw_pattern = Column(String, nullable=False) # e.g., "Used - Good"
     ebay_condition_id = Column(String, nullable=False) # e.g., "3000"
+
+class EbaySampleCache(Base):
+    __tablename__ = "ebay_sample_cache"
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    query_signature = Column(String, index=True, nullable=False)
+    sample_size = Column(Integer)
+    trimmed_median = Column(Float)
+    iqr = Column(Float)
+    mean = Column(Float)
+    confidence_score = Column(Float)
+    fetched_at = Column(DateTime)
+    ttl = Column(DateTime)
+
+class Valuation(Base):
+    __tablename__ = "valuations"
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"))
+    est_market_value = Column(Float)
+    market_adjustment_factor_applied = Column(Float)
+    max_bid_for_target_roi = Column(Float)
+    target_roi_pct = Column(Float)
+    computed_at = Column(DateTime)
