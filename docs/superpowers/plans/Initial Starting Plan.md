@@ -3,19 +3,23 @@
 This plan outlines the steps to build a Dockerized, single-user web application that identifies profitable arbitrage opportunities between niche auction sites and eBay.
 
 ## 1. Objective
+
 Build a personal tool to:
+
 - Ingest items ending within 7 days from Public Surplus (pilot), then Whitley and Roller Auction.
 - Match items to eBay **active listings** and derive a defensible market value despite the inherent biases of active-only data.
 - Calculate ROI, recommend a Max Bid given a target ROI, and surface high-confidence opportunities.
 - Provide a browser-based dashboard for tracking and real-time monitoring of targeted auctions, plus alerts when new high-ROI items appear.
 
 ### Operating constraints (decided)
+
 - **Single user.** No auth/multi-tenancy in v1.
 - **eBay sold-listing data is unavailable.** v1 uses active listings only; valuation methodology must compensate explicitly. Re-evaluate when Marketplace Insights becomes available.
 - **Sniper / auto-bidding is deferred.** v1 surfaces opportunities; user bids manually. Auto-bid behind a feature flag in a later phase, after empirical ROI tracking validates the math.
 - **Pilot site is Public Surplus** (documented API). Whitley and Roller follow only after the full loop works end-to-end on PS.
 
 ## 2. Key Components & Context
+
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy, APScheduler (daily sweeps), asyncio worker (hot polling), HTTPX, Playwright (only where reverse-engineered HTTP fails), RapidFuzz (fuzzy matching residuals).
 - **Frontend:** React (Vite/TypeScript), Tailwind CSS.
 - **Database:** PostgreSQL 16.
@@ -25,7 +29,8 @@ Build a personal tool to:
 ## 3. Implementation Steps
 
 ### Phase 0: API Discovery & Research (Mandatory; blocks Phase 1)
-*Goal: Map all data structures, auth flows, fee structures, and rate limits before any schema or code is written. Phase 1 cannot start until `docs/api_manifest.md` is complete.*
+
+_Goal: Map all data structures, auth flows, fee structures, and rate limits before any schema or code is written. Phase 1 cannot start until `docs/api_manifest.md` is complete._
 
 1. **Documentation Review (parallel):**
    - **Sub-agent A (eBay Browse API):** OAuth client-credentials flow, default rate limits (5,000 calls/day), available filters (`conditionIds`, `buyingOptions=FIXED_PRICE`, sort orders), response fields including `itemCreationDate`, `watchCount`/`itemViewCount` if exposed, `categoryId`, MPN/brand fields. Document keyset pagination and the largest practical page size.
@@ -37,6 +42,7 @@ Build a personal tool to:
 4. **Synthesis:** Consolidate into `docs/api_manifest.md` covering schemas, auth flows, fee structures, rate-limit observations, and known anti-bot signals.
 
 ### Phase 1: Project Scaffolding
+
 1. **Directory Structure:** `backend/`, `frontend/`, `docker-compose.yml`, `docs/`.
 2. **Database Schema (Sub-agent E):** First-pass tables — adjust as Phase 0 findings dictate.
    - `auction_houses` — id, name, url, fee structure ref, default tax rate, ToS notes.
@@ -54,7 +60,9 @@ Build a personal tool to:
 3. **Docker Setup:** FastAPI, React, Postgres containers. Persistent named volume for Postgres. Healthchecks. Internal network plus exposed dashboard port. Confirm `docker compose down` does not destroy the volume.
 
 ### Phase 2: Data Ingestion (Pilot: Public Surplus first)
-*Pilot Public Surplus end-to-end through Phase 5 before adding more sources.*
+
+_Pilot Public Surplus end-to-end through Phase 5 before adding more sources._
+
 1. **Base Scraper Interface:** Abstract class with `discover_ending_within(days)`, `fetch_detail(item)`, `health_check()`. Returns a normalized `Item` DTO.
 2. **Public Surplus client (Sub-agent F):** Official API integration. Daily discovery sweep for items ending within 7 days. Stores into `items`, updates `last_seen_at`.
 3. **Whitley + Roller clients (Sub-agent G, after pilot):** Reverse-engineered HTTP clients. Persistent session per site, header replay, jittered polling, exponential backoff on 4xx/5xx, alert on session/auth failures.
@@ -62,6 +70,7 @@ Build a personal tool to:
 5. **Scheduler:** APScheduler runs daily discovery; hot-polling worker (Phase 4) is separate.
 
 ### Phase 3: eBay Analysis Engine
+
 1. **eBay Browse client:** OAuth client-credentials, token refresh, retry/backoff. Configurable per-call sample size; default 100 results paginated.
 2. **Query construction & condition mapping:**
    - Parse auction title/description into `{brand, model, mpn, normalized_condition_id, residual_keywords}`.
@@ -85,12 +94,14 @@ Build a personal tool to:
    - Shipping inputs: per-item override, with a default per auction house (e.g., PS items often heavy/freight) and per-eBay-category outbound default.
 
 ### Phase 4: Backend API & Real-time Logic
+
 1. **CRUD endpoints:** items, watchlist, alert rules, valuations, settings (target ROI default, market adjustment factors per category, fee overrides).
 2. **Hot polling worker:** asyncio task pool. For items ending in < 30 min, refresh current bid every 30–60s. For items ending in < 5 min, refresh every 10–15s with jitter. Reuses persistent session from the scraper layer. Backs off immediately on any 4xx/5xx.
 3. **On-demand refresh endpoint:** when the user opens an item, trigger immediate refresh (rate-limited per item).
 4. **Alerts:** evaluate `alert_rules` against newly-discovered items each sweep; deliver via email (Resend or SES) for v1. SMS/push deferred.
 
 ### Phase 5: Frontend Development (Sub-agent H)
+
 1. **Main Dashboard:** ROI-sorted table; columns include est. market value, recommended Max Bid, **confidence score**, sample size, time remaining. Filter by confidence threshold.
 2. **Item Detail View:** matched eBay listings table, fee + shipping breakdown, sample-distribution chart (price histogram, age distribution), valuation history if multiple snapshots exist.
 3. **Watchlist Page:** real-time current bid via polling, planned Max Bid, "should I bid now?" indicator.
@@ -99,6 +110,7 @@ Build a personal tool to:
 6. **Outcome logging UI:** quick form to log auction close price and (later) realized flip price — feeds `price_outcomes` for tuning.
 
 ### Phase 6: Deployment & Verification
+
 1. **Environment Config:** `.env` for eBay OAuth, Resend/SES key, Postgres credentials. Never committed.
 2. **Networking:** Cross-container DNS works; dashboard reachable on local network.
 3. **Persistence:** Verify Postgres data survives `docker compose down && up`.
@@ -108,9 +120,11 @@ Build a personal tool to:
    - On-call signal: send email on consecutive scrape failures or eBay auth expiry.
 
 ### Phase 7 (deferred): Sniper / Auto-bidding
+
 Behind a feature flag. Requires (a) at least 30 days of `price_outcomes` data validating the model, (b) per-site ToS review documented, (c) explicit per-item arming by the user. Not in v1 scope — listed here only so the schema/UI hooks are designed with this future in mind.
 
 ## 4. Verification & Testing
+
 - **Unit tests:** condition parser, query builder, matching pipeline, sample filtering, trimmed-median + haircut math, forward ROI, inverse Max Bid.
 - **Recorded fixtures (VCR-style):** snapshot live API responses per source so tests don't depend on live sites or burn quota.
 - **Integration tests:** API connectivity smoke checks for each external source; run nightly.
@@ -119,6 +133,7 @@ Behind a feature flag. Requires (a) at least 30 days of `price_outcomes` data va
 - **Outcome backtest:** once `price_outcomes` has data, regress estimated vs. realized proceeds; surface the calibration curve in the settings UI and use it to recommend `market_adjustment_factor` tweaks.
 
 ## 5. Risks & Open Questions
+
 - **Active-listing bias is the single largest risk.** The methodology in Phase 3.4 is necessary but not sufficient — calibration via `price_outcomes` is what actually makes it trustworthy. Until that data exists, treat all ROI numbers as directional, not absolute.
 - **ToS exposure on Whitley/Roller.** Personal use only; no resale of scraped data; respect robots.txt and any explicit ToS prohibitions discovered in Phase 0. If a site's ToS prohibits automated access, document the decision to proceed (or not) before writing the client.
 - **eBay quota.** 5,000 Browse calls/day is tight if every new item triggers a fresh sample. Cache aggressively (Phase 3.4) and de-duplicate query signatures across items.

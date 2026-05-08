@@ -1,0 +1,13 @@
+{
+  "id": "research-pane-fixes-01",
+  "name": "Fixing Research Pane Issues",
+  "date": "2026-05-08",
+  "summary": "Investigated and fixed 4 issues in Research Pane: URL linking, eBay market data limits, filter pane structure, and time remaining accuracy.",
+  "files_in_context": [
+    "frontend/src/views/ResearchView.tsx",
+    "backend/app/routers/items.py",
+    "backend/app/services/valuation_worker.py",
+    "docs/superpowers/plans/2026-05-08-fix-research-issues.md"
+  ],
+  "progress": "Backend fixes complete. Frontend fixes implemented. Syntax errors at EOF of ResearchView.tsx resolved."
+}

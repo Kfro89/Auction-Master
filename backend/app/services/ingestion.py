@@ -1,16 +1,43 @@
 from datetime import datetime, timezone
+import json
+import asyncio
 from sqlalchemy.orm import Session
-from ..models import AuctionHouse, Auction, Item
+from ..models import AuctionHouse, Auction, Item, Setting
 from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
+from .llm import classify_item
 import logging
 
 logger = logging.getLogger(__name__)
+
+async def _process_item_tags(item_to_process: Item, description: str, category_id: str):
+    """Helper to process item tags asynchronously."""
+    # Try to map category id here if possible, fallback to category_id
+    raw_category = f"Category {category_id}" if category_id else "Unknown"
+    
+    classification = await classify_item(item_to_process.title, description, raw_category)
+    
+    # Store category as "Category > Type"
+    structured_category = f"{classification['category']} > {classification['type']}"
+    return structured_category, classification['tags']
 
 async def ingest_auctioneer_software(db: Session, base_url: str, website_key: str, name: str, buyer_premium: float):
     """
     Orchestrates the scraping and ingestion of data from an Auctioneer Software platform.
     """
-    # 1. Ensure AuctionHouse exists
+    # 1. Fetch stored Bidder IDs from settings
+    settings_record = db.query(Setting).filter(Setting.key == "bidder_ids").first()
+    user_bidder_ids = []
+    if settings_record and settings_record.value:
+        try:
+            val = json.loads(settings_record.value)
+            if isinstance(val, dict):
+                user_bidder_ids = [str(v) for v in val.values() if v]
+            else:
+                user_bidder_ids = [str(val)]
+        except:
+            user_bidder_ids = [str(settings_record.value)]
+
+    # 2. Ensure AuctionHouse exists
     house = db.query(AuctionHouse).filter(AuctionHouse.website_key == website_key).first()
     if not house:
         house = AuctionHouse(
@@ -36,22 +63,44 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 logger.warning(f"Skipping auction with no ID: {auction_data}")
                 continue
                 
+            auction_start_str = auction_data.get('start_time') or auction_data.get('startDate')
+            auction_end_str = auction_data.get('end_time') or auction_data.get('endDate')
+            
+            a_start_time = None
+            a_end_time = None
+            
+            try:
+                if auction_start_str:
+                    a_start_time = datetime.fromisoformat(auction_start_str.replace('Z', '+00:00'))
+                if auction_end_str:
+                    a_end_time = datetime.fromisoformat(auction_end_str.replace('Z', '+00:00'))
+            except Exception as e:
+                logger.warning(f"Failed to parse auction dates: {e}")
+
             auction = db.query(Auction).filter(Auction.external_id == ext_id, Auction.auction_house_id == house.id).first()
             if not auction:
                 auction = Auction(
                     auction_house_id=house.id,
                     external_id=ext_id,
-                    title=auction_data.get('name') or auction_data.get('title', 'Unknown Auction')
+                    title=auction_data.get('name') or auction_data.get('title', 'Unknown Auction'),
+                    start_time=a_start_time,
+                    end_time=a_end_time
                 )
                 db.add(auction)
                 db.commit()
                 db.refresh(auction)
                 logger.info(f"Created new auction record for {ext_id}")
+            else:
+                # Update auction dates if they changed
+                auction.start_time = a_start_time
+                auction.end_time = a_end_time
             
             # Now fetch lots for this auction
             _, lots_data = await scraper.fetch_auction_lots(ext_id)
             
             items_count = 0
+            new_items_to_tag = []
+            
             for lot in lots_data:
                 lot_ext_id = str(lot.get('lot_id') or lot.get('id'))
                 if not lot_ext_id or lot_ext_id == 'None':
@@ -60,14 +109,9 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 item = db.query(Item).filter(Item.external_id == lot_ext_id, Item.auction_house_id == house.id).first()
                 
                 # Extract values robustly
-                current_bid_obj = lot.get('currentBid') or lot.get('current_bid', {})
-                current_bid = 0.0
-                if isinstance(current_bid_obj, dict):
-                    current_bid = float(current_bid_obj.get('amount', 0.0))
-                elif isinstance(current_bid_obj, (int, float)):
-                    current_bid = float(current_bid_obj)
+                current_bid = float(lot.get('winning_bid_amount') or lot.get('starting_bid') or lot.get('price') or lot.get('required_bid') or 0.0)
                 
-                end_time_str = lot.get('endDate') or lot.get('end_date')
+                end_time_str = lot.get('end_time') or lot.get('endDate') or lot.get('end_date')
                 end_time = None
                 if end_time_str:
                     try:
@@ -76,6 +120,28 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     except Exception as e:
                         logger.warning(f"Failed to parse date {end_time_str}: {e}")
 
+                if not end_time and a_end_time:
+                    # Fallback to auction end time if lot end time is missing
+                    end_time = a_end_time
+
+                # Extract Image URL
+                primary_image = lot.get('primary_image') or lot.get('primaryImage', {})
+                image_url = None
+                if isinstance(primary_image, dict):
+                    image_url = primary_image.get('small') or primary_image.get('thumb') or primary_image.get('url')
+
+                # 2. Check if user is bidding
+                is_user_bidding = False
+                if lot.get('isHighBidder') is True:
+                    is_user_bidding = True
+                else:
+                    high_bidder_id = str(lot.get('highBidderId') or lot.get('high_bidder_id', ''))
+                    if high_bidder_id in user_bidder_ids:
+                        is_user_bidding = True
+                        
+                category_id = str(lot.get('category_id') or '')
+                description = lot.get('description', '')
+
                 if not item:
                     item = Item(
                         auction_house_id=house.id,
@@ -83,25 +149,63 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                         external_id=lot_ext_id,
                         lot_number=str(lot.get('lotNumber') or lot.get('lot_number', '')),
                         title=lot.get('title') or lot.get('name', 'Unknown'),
+                        description=description,
                         current_bid=current_bid,
                         bid_count=lot.get('bidCount') or lot.get('bid_count', 0),
                         end_time=end_time,
                         status=str(lot.get('status', 'open')).lower(),
                         url=f"{base_url}/auctions/{ext_id}/lot/{lot_ext_id}",
+                        image_url=image_url,
                         first_seen_at=datetime.now(timezone.utc),
-                        last_seen_at=datetime.now(timezone.utc)
+                        last_seen_at=datetime.now(timezone.utc),
+                        is_user_bidding=is_user_bidding,
+                        category=category_id,
+                        tags=[]
                     )
                     db.add(item)
+                    # We will tag this after adding to DB
+                    new_items_to_tag.append((item, description, category_id))
                     items_count += 1
                 else:
                     item.current_bid = current_bid
                     item.bid_count = lot.get('bidCount') or lot.get('bid_count', 0)
                     item.end_time = end_time
                     item.status = str(lot.get('status', 'open')).lower()
+                    item.image_url = image_url
                     item.last_seen_at = datetime.now(timezone.utc)
-                    items_count += 1
+                    item.is_user_bidding = is_user_bidding
                     
+                    if not item.category and category_id:
+                        item.category = category_id
+                    
+                    # Update tags if none
+                    if not item.tags:
+                        new_items_to_tag.append((item, description, category_id))
+                        
+                    items_count += 1
+            
+            # Flush first so we have the items in the DB
             db.commit()
+            
+            # Fetch tags in batches to not overwhelm LLM
+            batch_size = 5
+            for i in range(0, len(new_items_to_tag), batch_size):
+                batch = new_items_to_tag[i:i+batch_size]
+                tasks = []
+                for db_item, desc, cat_id in batch:
+                    tasks.append(_process_item_tags(db_item, desc, cat_id))
+                
+                results = await asyncio.gather(*tasks)
+                
+                for j, (cat_name, tags) in enumerate(results):
+                    db_item = batch[j][0]
+                    # Update category to a human readable name if LLM or our map improved it
+                    # Right now it just returns f"Category {cat_id}", you can adjust this if you map cat ids.
+                    db_item.category = cat_name
+                    db_item.tags = tags
+                
+                db.commit()
+                    
             logger.info(f"Committed {items_count} items for auction {ext_id}")
             
     finally:

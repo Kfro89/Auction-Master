@@ -1,6 +1,7 @@
 import re
 import json
 import httpx
+import asyncio
 from typing import List, Dict, Any, Tuple
 from .base import BaseScraper
 
@@ -83,18 +84,61 @@ class AuctioneerSoftwareScraper(BaseScraper):
 
     async def fetch_auction_lots(self, auction_id: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Fetch a specific auction page and extract its lots.
-        Returns a tuple: (auction_metadata, list_of_lots)
+        Fetch all lots for a specific auction by iterating through pagination.
         """
-        url = f"{self.base_url}/auctions/{auction_id}"
-        response = await self.client.get(url)
+        first_page_url = f"{self.base_url}/auctions/{auction_id}"
+        response = await self.client.get(first_page_url)
         response.raise_for_status()
         
-        state = self._extract_apollo_state(response.text)
+        first_page_state = self._extract_apollo_state(response.text)
+        auction_metadata = first_page_state.get(f"Auction.{auction_id}", {})
         
-        auction_metadata = state.get(f"Auction.{auction_id}", {})
+        total_lots = auction_metadata.get("front_visible_lot_count")
+        if total_lots is None:
+            # Fallback: if we can't find the count, just return the first page
+            lots = self._extract_lots_from_state(first_page_state)
+            return auction_metadata, lots
+            
+        all_lots_dict = {} # Use dict to avoid duplicates by ID
+        
+        # Add first page lots
+        for lot in self._extract_lots_from_state(first_page_state):
+            all_lots_dict[lot['id']] = lot
+            
+        # Determine how many pages we need. 
+        # The default pageSize seems to be 50 from our metadata inspection.
+        page_size = 50
+        current_page = 2
+        
+        while len(all_lots_dict) < total_lots:
+            # Safety break to avoid infinite loops
+            if current_page > 100: 
+                break
+                
+            page_url = f"{self.base_url}/auctions/{auction_id}?page={current_page}"
+            try:
+                await asyncio.sleep(1.0) # Rate limiting courtesy
+                response = await self.client.get(page_url)
+                response.raise_for_status()
+                
+                page_state = self._extract_apollo_state(response.text)
+                new_lots = self._extract_lots_from_state(page_state)
+                
+                if not new_lots:
+                    break # No more lots found
+                    
+                for lot in new_lots:
+                    all_lots_dict[lot['id']] = lot
+                    
+                current_page += 1
+            except Exception as e:
+                print(f"Error fetching page {current_page} for auction {auction_id}: {e}")
+                break
+                
+        return auction_metadata, list(all_lots_dict.values())
+
+    def _extract_lots_from_state(self, state: Dict[str, Any]) -> List[Dict[str, Any]]:
         lots = []
-        
         for key, value in state.items():
             if key.startswith("AuctionLot."):
                 lot_id = key.split(".")[1]
@@ -104,8 +148,7 @@ class AuctioneerSoftwareScraper(BaseScraper):
                     if 'id' not in lot_data:
                         lot_data['id'] = lot_id
                     lots.append(lot_data)
-                
-        return auction_metadata, lots
+        return lots
 
     async def health_check(self) -> bool:
         try:

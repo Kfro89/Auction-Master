@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from .database import Base
+import datetime
 
 class AuctionHouse(Base):
     __tablename__ = "auction_houses"
@@ -25,8 +26,8 @@ class Auction(Base):
     auction_house_id = Column(Integer, ForeignKey("auction_houses.id"), nullable=False)
     external_id = Column(String, index=True, nullable=False) # e.g., '24953'
     title = Column(String, nullable=False)
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
+    start_time = Column(DateTime(timezone=True))
+    end_time = Column(DateTime(timezone=True))
     location_address = Column(String)
     location_city = Column(String)
     location_state = Column(String)
@@ -50,14 +51,14 @@ class Item(Base):
     
     current_bid = Column(Float, default=0.0)
     bid_count = Column(Integer, default=0)
-    end_time = Column(DateTime)
+    end_time = Column(DateTime(timezone=True))
     status = Column(String) # open, closed, passed
     
     # Discovery and Tracking
     url = Column(String)
     image_url = Column(String)
-    first_seen_at = Column(DateTime)
-    last_seen_at = Column(DateTime)
+    first_seen_at = Column(DateTime(timezone=True))
+    last_seen_at = Column(DateTime(timezone=True))
     
     # Valuation parameters
     raw_condition = Column(String)
@@ -65,8 +66,22 @@ class Item(Base):
     brand = Column(String)
     mpn = Column(String)
     
+    # Enrichment
+    category = Column(String)
+    tags = Column(JSON, default=list)
+    
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")
+    valuation = relationship("Valuation", back_populates="item", uselist=False)
+    
+    is_user_bidding = Column(Boolean, default=False)
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(String) # Stored as string or JSON string
 
 
 class ConditionMap(Base):
@@ -87,8 +102,8 @@ class EbaySampleCache(Base):
     iqr = Column(Float)
     mean = Column(Float)
     confidence_score = Column(Float)
-    fetched_at = Column(DateTime)
-    ttl = Column(DateTime)
+    fetched_at = Column(DateTime(timezone=True))
+    ttl = Column(DateTime(timezone=True))
 
 class Valuation(Base):
     __tablename__ = "valuations"
@@ -99,4 +114,22 @@ class Valuation(Base):
     market_adjustment_factor_applied = Column(Float)
     max_bid_for_target_roi = Column(Float)
     target_roi_pct = Column(Float)
-    computed_at = Column(DateTime)
+    computed_at = Column(DateTime(timezone=True))
+
+    item = relationship("Item", back_populates="valuation")
+
+
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    barcode = Column(String, index=True)
+    title = Column(String)
+    drafted_title = Column(String)
+    drafted_description = Column(String)
+    ebay_category_id = Column(String)
+    buy_price = Column(Float)
+    estimated_price = Column(Float)
+    images = Column(JSON, default=list)
+    status = Column(String, default='staged') # staged, listed, sold
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)

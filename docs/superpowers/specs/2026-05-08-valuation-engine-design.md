@@ -15,7 +15,7 @@ The goal of this phase is to automate the valuation of auction items by comparin
 - **Batching:** Process 5 items per cycle to respect API rate limits.
 
 ### B. LLM Keyword Extraction Service
-- **Provider:** Local LM Studio instance (`192.168.0.63:1234/v1/`).
+- **Provider:** Local LM Studio instance (`localhost:1234/v1/`).
 - **Input:** Raw auction lot title.
 - **Output:** Clean product name + model number (e.g., "Grizzly G0602 Metal Lathe").
 - **Fallback:** If LLM fails or extraction is empty, use the first 50 characters of the title.

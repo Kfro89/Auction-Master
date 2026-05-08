@@ -1,0 +1,240 @@
+/* frontend/src/views/StoreView.css */
+.store-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+/* KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+}
+
+.kpi-card {
+  padding: 1.5rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-soft);
+}
+
+.kpi-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.05rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-main);
+}
+
+.kpi-trend {
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.kpi-trend.positive {
+  color: var(--success-color);
+}
+
+.kpi-trend.negative {
+  color: var(--danger-color);
+}
+
+/* Middle Section - Split Pane */
+.middle-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.panel-header {
+  padding: 1.25rem;
+  border-bottom: var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.badge {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary-color);
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.list-container {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-item {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+  color: var(--text-main);
+}
+
+.list-item:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.item-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #eee;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.item-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.item-price {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* Bottom Section - Active Listings Table */
+.bottom-section {
+  width: 100%;
+}
+
+.active-listings-panel {
+  width: 100%;
+}
+
+/* Reuse styles from ResearchView via generic classes if available, 
+   or redefine here for isolation */
+
+.glass {
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-soft);
+}
+
+.glass-panel {
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.dense-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.dense-grid th {
+  text-align: left;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dense-grid td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  color: var(--text-main);
+}
+
+.title-cell {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.bold {
+  font-weight: 700;
+}
+
+.small-btn {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.small-btn:hover {
+  background: var(--success-color);
+  color: #fff;
+}
+
+/* Header Section */
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.header-title h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
+}
+
+.header-title p {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}

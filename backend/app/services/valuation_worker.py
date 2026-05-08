@@ -21,7 +21,7 @@ async def process_pending_valuations(db: Session):
         .outerjoin(Valuation, Item.id == Valuation.item_id)
         .filter(Valuation.id == None)
         .order_by(Item.end_time.asc())
-        .limit(5)
+        .limit(100)
         .all()
     )
 

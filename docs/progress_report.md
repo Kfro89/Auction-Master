@@ -4,57 +4,69 @@ This document summarizes the current state of the Auction Arbitrage project, cap
 
 ## Current State
 
-We have successfully completed **Phase 0 (Research)**, **Phase 1 (Scaffolding)**, and the core implementation for **Phase 2 (Data Ingestion)**. The project is currently blocked from end-to-end testing only by the lack of a running Docker daemon on the current host machine.
+We have successfully completed **Phase 0 (Research)**, **Phase 1 (Scaffolding)**, **Phase 2 (Data Ingestion)**, **Phase 3 (Valuation Engine)**, **Phase 4 (ERP Dashboard)**, **Phase 5 (Inventory & Work Queue)**, and **Phase 6 (Store Analytics)**. This completes the entire Phase 4-6 ERP suite development cycle.
 
 ### 1. Architecture & Environment Scaffold
-- **Infrastructure:** Configured a local environment via `docker-compose.yml` comprising:
-  - `db`: PostgreSQL 16
-  - `backend`: Python 3.11 with FastAPI and Uvicorn
-  - `frontend`: Node.js 20 with React, Vite, and Tailwind CSS
-- **Database Schema:** Designed a unified SQLAlchemy model (`backend/app/models.py`) capable of normalizing disparate data from multiple auction platforms into standardized `AuctionHouse`, `Auction`, and `Item` entities.
-- **Migrations:** Configured Alembic (`backend/alembic/env.py`) to automatically detect model changes.
+- **Infrastructure:** Fully operational Docker environment.
+- **Glass Shell:** Multi-tab application shell with collapsible glassmorphism navigation.
 
 ### 2. Scraping Engine (Phase 2)
-Based on Phase 0 research, we pivoted Phase 2 to pilot **Whitley Auction** and **Roller Auction** simultaneously, as both utilize the identical SaaS platform ("Auctioneer Software").
+- **Bid Tracking:** Automatically detects user bidding status by matching Bidder IDs in the Apollo state during ingestion.
 
-- **Base Interface (`backend/app/scrapers/base.py`)**: Abstract base class enforcing discovery and extraction contracts.
-- **Implementation (`backend/app/scrapers/auctioneer_software.py`)**: 
-  - Utilizes `httpx.AsyncClient` for robust HTTP requests.
-  - Instead of brittle DOM parsing, it employs a highly efficient Regex strategy to extract the `window.__APOLLO_STATE__` JSON object injected into the page HTML by the server. 
-  - Directly maps the internal Apollo GraphQL `Auction` and `AuctionLot` entities to bypass API protections and pagination complexities.
-- **Ingestion Orchestration (`backend/app/services/ingestion.py`)**: Handles the normalization of Apollo state JSON, timestamp conversion, and bulk `upsert` logic into the PostgreSQL database.
+### 3. Valuation Engine (Phase 3)
+- **Statistical Analysis:** ROI calculation with outlier removal and market haircuts.
+- **LLM Pre-processing:** Clean query extraction using Gemma.
 
-### 3. API Endpoints
-- `POST /api/admin/scrape/whitley`: Triggers ingestion for Whitley Auction (applies an 18.5% buyer's premium).
-- `POST /api/admin/scrape/roller`: Triggers ingestion for Roller Auction (applies a 13.0% buyer's premium).
+### 4. ERP Dashboard (Phase 4)
+- **Research View:** High-ROI highlights and dense priority grid.
+- **Bidding View:** Focuses on active bids and items ending today.
+- **Settings View:** Credentials and Bidder ID management.
+
+### 5. Inventory & Work Queue (Phase 5)
+- **Work Queue View:** A specialized staging area for new inventory.
+- **Barcode Scanning:** Support for UPC/EAN input with automatic eBay price/title lookup fallback.
+- **AI Listing Drafts:** Integrated LLM service (`backend/app/services/drafting.py`) to generate SEO-optimized eBay titles and descriptions.
+- **Staging Workflow:** Multi-step process from scan to drafting and manual review.
+- **Persistence:** New `InventoryItem` model to track staged items.
+
+### 6. Store Analytics (Phase 6)
+- **eBay Integration:** Real-time sync of active listings and sales KPIs.
+- **Traffic Metrics:** Insights into impressions, views, and watchers.
+- **Store Dashboard:** High-level analytics (30/60/90/YTD sales) and split pane for shipment/history.
+
+### 7. Polish & Production Readiness (Phase 7)
+- **Automated Sweeps:** Configured APScheduler to run background scraping and valuation sweeps continuously.
+- **Authentication:** Implemented a robust JWT-based backend authentication layer.
+- **Frontend Security:** App Shell is secured via a glassmorphism login interceptor, protecting internal logic from unauthorized access.
 
 ---
 
-## Next Steps: Environment Initialization (Target Machine)
+## Major Changes & Course Corrections (Evolution to ERP)
+Over the course of Phases 4-7, the project underwent a significant evolution in scope and architecture:
+1. **Scope Expansion (CLI to ERP):** Initially conceived as a backend-heavy scraping tool with a basic dashboard, the project was vastly expanded into a full "Auction Master ERP Suite" to handle the entire business lifecycle: Discovery, Bidding, Staging, and Sales.
+2. **UI Architecture (Glass Shell):** Adopted a modern, premium "Glass Master" aesthetic featuring a collapsible left navigation pane with `backdrop-filter` blurs, dark-mode themes, and tactile noise backgrounds.
+3. **Hybrid Staging Workflow:** Introduced the "Work Queue" to bridge the physical and digital gap, allowing mobile-friendly barcode scanning (UPC/EAN) to trigger fallback eBay lookups when local research data is missing.
+4. **AI-Driven Listing Generation:** Integrated local LLM capabilities not just for title cleaning (Phase 3) but also for generating complete SEO-optimized eBay drafts (titles and descriptions) in the Work Queue (Phase 5).
+5. **eBay API Broadening:** Expanded from just the Browse API (for valuation) to include structural implementations for Store/Analytics and Trading API integration to support full seller dashboards.
 
-When you resume development on the new machine with Docker installed, follow these steps to initialize the environment and verify the ingestion pipeline:
+## Recent Refinements & Bug Fixes
+Following the completion of the core phases, several critical stability and accuracy improvements were made:
+- **Frontend Authentication Interceptor:** Fixed an issue where the frontend crashed due to unhandled 401 errors. A global fetch interceptor now securely attaches the JWT token to all `/api/` requests and safely redirects to the login view on session expiration.
+- **Accurate Bid Extraction:** Discovered that Apollo GraphQL state hides active bids in various fields depending on auction state (`winning_bid_amount`, `starting_bid`, `price`, `required_bid`). The scraper was overhauled to aggressively check these fields to extract the true current bid instead of defaulting to $0.
+- **Auction Timing Fix:** Resolved a critical issue where all items displayed "Ending Now" due to incorrect date field keys in the ingestion service. Switched to `end_time` (with `endDate`/`end_date` fallbacks) and migrated the database to `TIMESTAMPTZ` to ensure timezone-aware UTC consistency across the stack.
+- **Full Auction Ingestion (Pagination):** Upgraded the `AuctioneerSoftwareScraper` to handle multi-page auctions. It now detects total lot counts and automatically iterates through all pages (using `?page=N`), ensuring that large auctions are ingested in their entirety rather than being limited to the first 50 items.
+- **Image Ingestion:** Corrected the ingestion service to accurately extract and persist high-quality thumbnail images (`primary_image.url`, `small`, `thumb`) from the auctioneer software platforms.
+- **Dynamic ROI & Mathematical Accuracy:** Overhauled the frontend ROI calculation to accurately project profit margins based on true Cost (Current Bid) vs Estimated Market Value, rather than the target max bid. Added divide-by-zero protection for items with no starting bids.
+- **Configurable Target ROI:** Upgraded the Research View with a dynamic user-configurable Target ROI setting, passing the variable directly to the valuation engine backend to recalculate max bids on the fly.
 
-### Step 1: Start the Docker Stack
-From the root directory containing `docker-compose.yml`:
-```bash
-docker compose up --build -d
-```
-Verify that `db`, `backend`, and `frontend` containers are running and healthy.
+---
 
-### Step 2: Initialize the Database Schema
-Execute the following commands to generate and apply the initial Alembic migration based on the unified schema:
-```bash
-docker compose exec backend alembic revision --autogenerate -m "Initial schema"
-docker compose exec backend alembic upgrade head
-```
+## Next Steps
 
-### Step 3: Run the Ingestion Pilot
-With the backend running (default port 8000), trigger the manual scraping endpoints to populate the database:
-```bash
-curl -X POST http://localhost:8000/api/admin/scrape/whitley
-curl -X POST http://localhost:8000/api/admin/scrape/roller
-```
-*Note: Monitor the backend container logs (`docker compose logs -f backend`) to observe the discovery and extraction process.*
+### Deployment
+- **Hosting Strategy:** Provision a VPS or cloud environment to host the Docker stack.
+- **Reverse Proxy:** Configure a reverse proxy (e.g., Nginx, Traefik) to handle HTTPS termination and route traffic securely to the frontend and backend containers.
+- **Continuous Integration (CI):** Implement a CI/CD pipeline to automate testing and deployment for future updates.
 
-### Step 4: Proceed to Phase 3 (Valuation)
-Once ingestion is verified, the next major milestone is **Phase 3: Valuation & Market Analysis**. This will involve integrating the eBay Browse API to evaluate the ingested `Items` and assigning profitability scores.
+
+\n### 8. Frosted Alabaster UI Rework (Phase 8)\n- Completely overhauled the UI from dark/textured to a light-mode "Frosted Alabaster" aesthetic.\n- Implemented dynamic KPI filtering (Today, Tomorrow, This Week) in the Research View.\n- Replaced all emojis with professional `lucide-react` icons.\n- Added sortable column headers to tables via a new `useSortableData` custom hook.\n- Created reusable `Modal` and `Tooltip` components to enhance interactivity (Image Lightboxes and Iframe previews).
