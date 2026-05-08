@@ -34,10 +34,15 @@ We have successfully completed **Phase 0 (Research)**, **Phase 1 (Scaffolding)**
 - **Traffic Metrics:** Insights into impressions, views, and watchers.
 - **Store Dashboard:** High-level analytics (30/60/90/YTD sales) and split pane for shipment/history.
 
+### 7. Polish & Production Readiness (Phase 7)
+- **Automated Sweeps:** Configured APScheduler to run background scraping and valuation sweeps continuously.
+- **Authentication:** Implemented a robust JWT-based backend authentication layer.
+- **Frontend Security:** App Shell is secured via a glassmorphism login interceptor, protecting internal logic from unauthorized access.
+
 ---
 
 ## Major Changes & Course Corrections (Evolution to ERP)
-Over the course of Phases 4-6, the project underwent a significant evolution in scope and architecture:
+Over the course of Phases 4-7, the project underwent a significant evolution in scope and architecture:
 1. **Scope Expansion (CLI to ERP):** Initially conceived as a backend-heavy scraping tool with a basic dashboard, the project was vastly expanded into a full "Auction Master ERP Suite" to handle the entire business lifecycle: Discovery, Bidding, Staging, and Sales.
 2. **UI Architecture (Glass Shell):** Adopted a modern, premium "Glass Master" aesthetic featuring a collapsible left navigation pane with `backdrop-filter` blurs, dark-mode themes, and tactile noise backgrounds.
 3. **Hybrid Staging Workflow:** Introduced the "Work Queue" to bridge the physical and digital gap, allowing mobile-friendly barcode scanning (UPC/EAN) to trigger fallback eBay lookups when local research data is missing.
@@ -48,9 +53,9 @@ Over the course of Phases 4-6, the project underwent a significant evolution in 
 
 ## Next Steps
 
-### Phase 7: Polish & Production Readiness
-- **Authentication:** Implement robust authentication if moving beyond single-user local deployment.
-- **Notifications:** Set up email alerts using Resend for high-profit opportunities.
-- **Automated Sweeps:** Configure APScheduler to run ingestion and valuation daily without manual triggers.
+### Deployment
+- **Hosting Strategy:** Provision a VPS or cloud environment to host the Docker stack.
+- **Reverse Proxy:** Configure a reverse proxy (e.g., Nginx, Traefik) to handle HTTPS termination and route traffic securely to the frontend and backend containers.
+- **Continuous Integration (CI):** Implement a CI/CD pipeline to automate testing and deployment for future updates.
 
 

@@ -33,6 +33,7 @@ Designs and implementation plans for the comprehensive web interface, staging wo
 - **[superpowers/plans/2026-05-08-research-tab-implementation.md](./superpowers/plans/2026-05-08-research-tab-implementation.md)**: Phase 4.2 Plan.
 - **[superpowers/plans/2026-05-08-work-queue-implementation.md](./superpowers/plans/2026-05-08-work-queue-implementation.md)**: Phase 5 Plan.
 - **[superpowers/plans/2026-05-08-store-analytics-implementation.md](./superpowers/plans/2026-05-08-store-analytics-implementation.md)**: Phase 6 Plan.
+- **[superpowers/plans/2026-05-08-polish-readiness.md](./superpowers/plans/2026-05-08-polish-readiness.md)**: Phase 7 Plan.
 
 ---
 
