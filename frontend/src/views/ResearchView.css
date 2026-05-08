@@ -1,0 +1,85 @@
+/* frontend/src/views/ResearchView.css */
+.research-view {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.highlights-bar {
+  display: flex;
+  gap: 1.5rem;
+  overflow-x: auto;
+  padding: 0.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.roi-card {
+  min-width: 280px;
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  gap: 1rem;
+  box-shadow: var(--shadow-deep);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.roi-card-img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.roi-badge {
+  background: var(--success-color);
+  color: #000;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+.dense-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  background: var(--surface-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dense-grid th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dense-grid td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.title-cell {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.high-profit {
+  background: rgba(0, 255, 136, 0.05);
+}
+
+.small-btn {
+  background: var(--primary-color);
+  color: #000;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}

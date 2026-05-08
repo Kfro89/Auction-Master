@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import Navigation from './components/Navigation';
+import ResearchView from './views/ResearchView';
 
 function App() {
   const [activeTab, setActiveTab] = useState('research');
@@ -9,7 +10,7 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'research':
-        return <div><h1>Research</h1><p>Auction discovery and ROI analysis.</p></div>;
+        return <ResearchView />;
       case 'bidding':
         return <div><h1>Bidding</h1><p>Active bids and items ending today.</p></div>;
       case 'work-queue':
