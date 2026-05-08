@@ -16,12 +16,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/admin/login', {
+      const formData = new URLSearchParams();
+      formData.append('username', 'admin'); // Default admin username
+      formData.append('password', password);
+
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({ password }),
+        body: formData.toString(),
       });
 
       if (response.ok) {
