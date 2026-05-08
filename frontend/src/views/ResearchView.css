@@ -306,7 +306,7 @@
 
 /* ROI Highlighting */
 .high-profit {
-  background: rgba(16, 185, 129, 0.05) !important;
+  background: rgba(16, 185, 129, 0.25) !important;
 }
 
 .roi-text-high {
