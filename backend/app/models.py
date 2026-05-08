@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from .database import Base
+import datetime
 
 class AuctionHouse(Base):
     __tablename__ = "auction_houses"
@@ -112,3 +113,19 @@ class Valuation(Base):
     computed_at = Column(DateTime)
 
     item = relationship("Item", back_populates="valuation")
+
+
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    barcode = Column(String, index=True)
+    title = Column(String)
+    drafted_title = Column(String)
+    drafted_description = Column(String)
+    ebay_category_id = Column(String)
+    buy_price = Column(Float)
+    estimated_price = Column(Float)
+    images = Column(JSON, default=list)
+    status = Column(String, default='staged') # staged, listed, sold
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

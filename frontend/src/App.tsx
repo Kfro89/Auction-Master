@@ -4,6 +4,7 @@ import Navigation from './components/Navigation';
 import ResearchView from './views/ResearchView';
 import SettingsView from './views/SettingsView';
 import BiddingView from './views/BiddingView';
+import WorkQueueView from './views/WorkQueueView';
 
 function App() {
   const [activeTab, setActiveTab] = useState('research');
@@ -16,7 +17,7 @@ function App() {
       case 'bidding':
         return <BiddingView />;
       case 'work-queue':
-        return <div><h1>Work Queue</h1><p>Staging area for eBay listings.</p></div>;
+        return <WorkQueueView />;
       case 'store':
         return <div><h1>Store</h1><p>EBay inventory and performance analytics.</p></div>;
       case 'settings':
