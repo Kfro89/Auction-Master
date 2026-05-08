@@ -58,9 +58,9 @@ async def scrape_roller(db: Session = Depends(get_db), current_user: str = Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/valuate/{item_id}")
-async def valuate_item(item_id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def valuate_item(item_id: int, target_roi: float = 0.30, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     try:
-        valuation = await run_item_valuation(db, item_id)
+        valuation = await run_item_valuation(db, item_id, target_roi)
         if not valuation:
             raise HTTPException(status_code=400, detail="Could not calculate valuation (insufficient data or item not found)")
         return valuation

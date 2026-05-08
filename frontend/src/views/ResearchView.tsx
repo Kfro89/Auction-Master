@@ -62,6 +62,7 @@ const ResearchView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState<{ [key: string]: boolean }>({ whitley: false, roller: false });
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
+  const [targetRoi, setTargetRoi] = useState<number>(30);
 
   const fetchItems = async () => {
     try {
@@ -102,7 +103,7 @@ const ResearchView: React.FC = () => {
   const handleValuate = async (itemId: number) => {
     setValuatingItems(prev => new Set(prev).add(itemId));
     try {
-      const response = await fetch(`/api/admin/valuate/${itemId}`, { method: 'POST' });
+      const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
       if (response.ok) {
         const newValuation = await response.json();
         setItems(prev => prev.map(item => 
@@ -145,6 +146,18 @@ const ResearchView: React.FC = () => {
           <p>Real-time arbitrage opportunities from top auction houses.</p>
         </div>
         <div className="header-actions">
+          <div className="roi-setting glass">
+            <label>Target ROI: </label>
+            <input 
+              type="number" 
+              value={targetRoi} 
+              onChange={(e) => setTargetRoi(Number(e.target.value))}
+              min="0"
+              max="500"
+              style={{ width: '60px', background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '4px', borderRadius: '4px' }}
+            />
+            %
+          </div>
           <button 
             className={`action-btn glass ${scraping.whitley ? 'loading' : ''}`}
             onClick={() => handleScrape('whitley')}
@@ -165,16 +178,27 @@ const ResearchView: React.FC = () => {
       </header>
 
       <section className="highlights-bar">
-        {highRoiItems.map(item => (
+        {highRoiItems.map(item => {
+          let roi: number | null = null;
+          if (item.valuation) {
+            if (item.current_bid > 0) {
+              roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+            } else {
+              roi = Infinity;
+            }
+          }
+          
+          return (
           <div key={item.id} className="roi-card glass-card">
             <img src={item.image_url || '/placeholder.png'} alt="" className="roi-card-img" />
             <div className="roi-card-info">
-              <span className="roi-badge">ROI: {Math.round(((item.valuation?.max_bid_for_target_roi || 0) - item.current_bid) / item.current_bid * 100)}%</span>
+              <span className="roi-badge">ROI: {roi === Infinity ? '∞%' : `${Math.round(roi || 0)}%`}</span>
               <h3>{item.title}</h3>
               <p>Bid: ${item.current_bid} | Max: ${item.valuation?.max_bid_for_target_roi.toFixed(2)}</p>
             </div>
           </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className="grid-section">
@@ -195,8 +219,14 @@ const ResearchView: React.FC = () => {
             </thead>
             <tbody>
               {items.map(item => {
-                const cost = item.current_bid > 0 ? item.current_bid : 1;
-                const roi = item.valuation ? ((item.valuation.est_market_value - cost) / cost * 100) : null;
+                let roi: number | null = null;
+                if (item.valuation) {
+                  if (item.current_bid > 0) {
+                    roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+                  } else {
+                    roi = Infinity;
+                  }
+                }
                 const isValuating = valuatingItems.has(item.id);
                 const isHighRoi = roi !== null && roi > 25;
                 
@@ -209,7 +239,7 @@ const ResearchView: React.FC = () => {
                     <td>{item.valuation ? `$${item.valuation.est_market_value.toFixed(2)}` : '--'}</td>
                     <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
                     <td className={isHighRoi ? 'roi-text-high' : ''}>
-                      {roi !== null ? `${Math.round(roi)}%` : '--'}
+                      {roi !== null ? (roi === Infinity ? '∞%' : `${Math.round(roi)}%`) : '--'}
                     </td>
                     <td className="timer-cell">
                       <CountdownTimer endTime={item.end_time} />

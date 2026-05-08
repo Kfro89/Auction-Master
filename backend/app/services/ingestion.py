@@ -74,12 +74,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 item = db.query(Item).filter(Item.external_id == lot_ext_id, Item.auction_house_id == house.id).first()
                 
                 # Extract values robustly
-                current_bid_obj = lot.get('currentBid') or lot.get('current_bid', {})
-                current_bid = 0.0
-                if isinstance(current_bid_obj, dict):
-                    current_bid = float(current_bid_obj.get('amount', 0.0))
-                elif isinstance(current_bid_obj, (int, float)):
-                    current_bid = float(current_bid_obj)
+                current_bid = float(lot.get('winning_bid_amount') or lot.get('starting_bid') or lot.get('price') or lot.get('required_bid') or 0.0)
                 
                 end_time_str = lot.get('endDate') or lot.get('end_date')
                 end_time = None

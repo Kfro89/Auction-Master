@@ -62,7 +62,7 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
         "max_bid_for_target_roi": max_bid_for_target_roi
     }
 
-async def run_item_valuation(db: Session, item_id: int) -> Optional[Valuation]:
+async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30) -> Optional[Valuation]:
     """
     Performs a full valuation for a single item, including LLM extraction and eBay search.
     """
@@ -107,7 +107,7 @@ async def run_item_valuation(db: Session, item_id: int) -> Optional[Valuation]:
         return None
 
     # 4. Calculate
-    val_data = calculate_valuation(prices, target_roi=0.30, auction_premium=premium)
+    val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium)
     if not val_data:
         return None
 
@@ -123,16 +123,19 @@ async def run_item_valuation(db: Session, item_id: int) -> Optional[Valuation]:
     db.commit()
     db.refresh(sample_cache)
 
-    valuation = Valuation(
-        item_id=item.id,
-        sample_cache_id=sample_cache.id,
-        est_market_value=val_data["est_market_value"],
-        market_adjustment_factor_applied=0.75,
-        max_bid_for_target_roi=val_data["max_bid_for_target_roi"],
-        target_roi_pct=0.30,
-        computed_at=datetime.datetime.utcnow()
-    )
-    db.add(valuation)
+    # Check if valuation exists
+    valuation = db.query(Valuation).filter(Valuation.item_id == item.id).first()
+    if not valuation:
+        valuation = Valuation(item_id=item.id)
+        db.add(valuation)
+
+    valuation.sample_cache_id = sample_cache.id
+    valuation.est_market_value = val_data["est_market_value"]
+    valuation.market_adjustment_factor_applied = 0.75
+    valuation.max_bid_for_target_roi = val_data["max_bid_for_target_roi"]
+    valuation.target_roi_pct = target_roi
+    valuation.computed_at = datetime.datetime.utcnow()
+
     db.commit()
     db.refresh(valuation)
 
