@@ -1,0 +1,34 @@
+import httpx
+from typing import List, Dict, Any
+from .ebay_auth import EbayAuthClient
+
+class EbayBrowseClient:
+    def __init__(self, auth_client: EbayAuthClient):
+        self.auth_client = auth_client
+        self.base_url = "https://api.ebay.com/buy/browse/v1"
+
+    async def search_active_listings(self, query: str, condition_ids: List[str]) -> Dict[str, Any]:
+        token = await self.auth_client.get_token()
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        conditions_str = "|".join(condition_ids)
+        filter_str = f"buyingOptions:{{FIXED_PRICE}},conditionIds:{{{conditions_str}}}"
+        
+        params = {
+            "q": query,
+            "filter": filter_str,
+            "limit": "100"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/item_summary/search",
+                headers=headers,
+                params=params
+            )
+            response.raise_for_status()
+            return response.json()
