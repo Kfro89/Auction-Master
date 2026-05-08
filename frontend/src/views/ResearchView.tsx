@@ -66,8 +66,10 @@ const ResearchView: React.FC = () => {
   const fetchItems = async () => {
     try {
       const response = await fetch('/api/items/');
-      const data = await response.json();
-      setItems(data);
+      if (response.ok) {
+        const data = await response.json();
+        setItems(data);
+      }
     } catch (error) {
       console.error('Failed to fetch items:', error);
     } finally {
@@ -122,10 +124,12 @@ const ResearchView: React.FC = () => {
 
   const highRoiItems = useMemo(() => {
     return items
-      .filter(item => item.valuation && item.valuation.max_bid_for_target_roi > item.current_bid)
+      .filter(item => item.valuation && item.valuation.est_market_value > item.current_bid)
       .sort((a, b) => {
-        const roiA = ((a.valuation?.max_bid_for_target_roi || 0) - a.current_bid) / a.current_bid;
-        const roiB = ((b.valuation?.max_bid_for_target_roi || 0) - b.current_bid) / b.current_bid;
+        const costA = a.current_bid > 0 ? a.current_bid : 1;
+        const costB = b.current_bid > 0 ? b.current_bid : 1;
+        const roiA = ((a.valuation?.est_market_value || 0) - costA) / costA;
+        const roiB = ((b.valuation?.est_market_value || 0) - costB) / costB;
         return roiB - roiA;
       })
       .slice(0, 5);
@@ -191,7 +195,8 @@ const ResearchView: React.FC = () => {
             </thead>
             <tbody>
               {items.map(item => {
-                const roi = item.valuation ? ((item.valuation.max_bid_for_target_roi - item.current_bid) / item.current_bid * 100) : null;
+                const cost = item.current_bid > 0 ? item.current_bid : 1;
+                const roi = item.valuation ? ((item.valuation.est_market_value - cost) / cost * 100) : null;
                 const isValuating = valuatingItems.has(item.id);
                 const isHighRoi = roi !== null && roi > 25;
                 
