@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+import json
 from sqlalchemy.orm import Session
-from ..models import AuctionHouse, Auction, Item
+from ..models import AuctionHouse, Auction, Item, Setting
 from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
 import logging
 
@@ -10,7 +11,20 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
     """
     Orchestrates the scraping and ingestion of data from an Auctioneer Software platform.
     """
-    # 1. Ensure AuctionHouse exists
+    # 1. Fetch stored Bidder IDs from settings
+    settings_record = db.query(Setting).filter(Setting.key == "bidder_ids").first()
+    user_bidder_ids = []
+    if settings_record and settings_record.value:
+        try:
+            val = json.loads(settings_record.value)
+            if isinstance(val, dict):
+                user_bidder_ids = [str(v) for v in val.values() if v]
+            else:
+                user_bidder_ids = [str(val)]
+        except:
+            user_bidder_ids = [str(settings_record.value)]
+
+    # 2. Ensure AuctionHouse exists
     house = db.query(AuctionHouse).filter(AuctionHouse.website_key == website_key).first()
     if not house:
         house = AuctionHouse(
@@ -76,6 +90,15 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     except Exception as e:
                         logger.warning(f"Failed to parse date {end_time_str}: {e}")
 
+                # 2. Check if user is bidding
+                is_user_bidding = False
+                if lot.get('isHighBidder') is True:
+                    is_user_bidding = True
+                else:
+                    high_bidder_id = str(lot.get('highBidderId') or lot.get('high_bidder_id', ''))
+                    if high_bidder_id in user_bidder_ids:
+                        is_user_bidding = True
+
                 if not item:
                     item = Item(
                         auction_house_id=house.id,
@@ -89,7 +112,8 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                         status=str(lot.get('status', 'open')).lower(),
                         url=f"{base_url}/auctions/{ext_id}/lot/{lot_ext_id}",
                         first_seen_at=datetime.now(timezone.utc),
-                        last_seen_at=datetime.now(timezone.utc)
+                        last_seen_at=datetime.now(timezone.utc),
+                        is_user_bidding=is_user_bidding
                     )
                     db.add(item)
                     items_count += 1
@@ -99,6 +123,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     item.end_time = end_time
                     item.status = str(lot.get('status', 'open')).lower()
                     item.last_seen_at = datetime.now(timezone.utc)
+                    item.is_user_bidding = is_user_bidding
                     items_count += 1
                     
             db.commit()

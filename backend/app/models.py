@@ -68,6 +68,15 @@ class Item(Base):
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")
     valuation = relationship("Valuation", back_populates="item", uselist=False)
+    
+    is_user_bidding = Column(Boolean, default=False)
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(String) # Stored as string or JSON string
 
 
 class ConditionMap(Base):

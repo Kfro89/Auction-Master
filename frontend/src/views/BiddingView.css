@@ -1,0 +1,43 @@
+.bidding-view {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.summary-section {
+  display: flex;
+  gap: 2rem;
+}
+
+.summary-card.glass {
+  flex: 1;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-deep);
+}
+
+.summary-card h2 {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+}
+
+.summary-stat {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.bidding-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bid-cell {
+  color: var(--success-color);
+  font-weight: bold;
+}

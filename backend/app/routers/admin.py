@@ -4,12 +4,30 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..services.ingestion import ingest_auctioneer_software
-from ..models import Item, AuctionHouse, EbaySampleCache, Valuation
+from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, Setting
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.valuation import calculate_valuation, run_item_valuation
 
 router = APIRouter()
+
+@router.get("/settings")
+async def get_settings(db: Session = Depends(get_db)):
+    settings = db.query(Setting).all()
+    return {s.key: s.value for s in settings}
+
+@router.post("/settings")
+async def update_settings(settings_data: dict, db: Session = Depends(get_db)):
+    for key, value in settings_data.items():
+        setting = db.query(Setting).filter(Setting.key == key).first()
+        str_value = str(value) if value is not None else None
+        if setting:
+            setting.value = str_value
+        else:
+            setting = Setting(key=key, value=str_value)
+            db.add(setting)
+    db.commit()
+    return {"status": "success"}
 
 @router.post("/scrape/whitley")
 async def scrape_whitley(db: Session = Depends(get_db)):
