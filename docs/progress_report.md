@@ -49,6 +49,14 @@ Over the course of Phases 4-7, the project underwent a significant evolution in 
 4. **AI-Driven Listing Generation:** Integrated local LLM capabilities not just for title cleaning (Phase 3) but also for generating complete SEO-optimized eBay drafts (titles and descriptions) in the Work Queue (Phase 5).
 5. **eBay API Broadening:** Expanded from just the Browse API (for valuation) to include structural implementations for Store/Analytics and Trading API integration to support full seller dashboards.
 
+## Recent Refinements & Bug Fixes
+Following the completion of the core phases, several critical stability and accuracy improvements were made:
+- **Frontend Authentication Interceptor:** Fixed an issue where the frontend crashed due to unhandled 401 errors. A global fetch interceptor now securely attaches the JWT token to all `/api/` requests and safely redirects to the login view on session expiration.
+- **Accurate Bid Extraction:** Discovered that Apollo GraphQL state hides active bids in various fields depending on auction state (`winning_bid_amount`, `starting_bid`, `price`, `required_bid`). The scraper was overhauled to aggressively check these fields to extract the true current bid instead of defaulting to $0.
+- **Image Ingestion:** Corrected the ingestion service to accurately extract and persist high-quality thumbnail images (`primary_image.url`, `small`, `thumb`) from the auctioneer software platforms.
+- **Dynamic ROI & Mathematical Accuracy:** Overhauled the frontend ROI calculation to accurately project profit margins based on true Cost (Current Bid) vs Estimated Market Value, rather than the target max bid. Added divide-by-zero protection for items with no starting bids.
+- **Configurable Target ROI:** Upgraded the Research View with a dynamic user-configurable Target ROI setting, passing the variable directly to the valuation engine backend to recalculate max bids on the fly.
+
 ---
 
 ## Next Steps
