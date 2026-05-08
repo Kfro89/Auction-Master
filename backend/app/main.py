@@ -6,7 +6,11 @@ from . import models
 # For now, we'll let Alembic handle migrations, but ensure tables are created
 # Base.metadata.create_all(bind=engine)
 
+from .routers import admin
+
 app = FastAPI(title="Auction Arbitrage API")
+
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
