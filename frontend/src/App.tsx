@@ -6,10 +6,16 @@ import SettingsView from './views/SettingsView';
 import BiddingView from './views/BiddingView';
 import WorkQueueView from './views/WorkQueueView';
 import StoreView from './views/StoreView';
+import LoginView from './views/LoginView';
 
 function App() {
+  const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
   const [activeTab, setActiveTab] = useState('research');
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
+
+  if (!token) {
+    return <LoginView onLogin={setToken} />;
+  }
 
   const renderContent = () => {
     switch (activeTab) {
