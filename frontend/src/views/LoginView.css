@@ -29,10 +29,10 @@
 .logo-placeholder {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  background: var(--primary-color);
   border-radius: 16px;
   margin: 0 auto 16px;
-  box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
 }
 
 .login-header h1 {

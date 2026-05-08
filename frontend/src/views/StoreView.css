@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 /* KPI Grid */
@@ -19,6 +19,10 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-soft);
 }
 
 .kpi-title {
@@ -35,9 +39,7 @@
   font-size: 1.75rem;
   font-weight: 800;
   margin: 0 0 0.5rem 0;
-  background: linear-gradient(135deg, #fff 0%, #aaa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-main);
 }
 
 .kpi-trend {
@@ -49,11 +51,11 @@
 }
 
 .kpi-trend.positive {
-  color: var(--success-color, #00ff88);
+  color: var(--success-color);
 }
 
 .kpi-trend.negative {
-  color: #ff4d4d;
+  color: var(--danger-color);
 }
 
 /* Middle Section - Split Pane */
@@ -65,7 +67,7 @@
 
 .panel-header {
   padding: 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: var(--glass-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -75,11 +77,12 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
+  color: var(--text-main);
 }
 
 .badge {
-  background: var(--primary-color, #00ff88);
-  color: #000;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary-color);
   padding: 2px 8px;
   border-radius: 99px;
   font-size: 0.75rem;
@@ -99,10 +102,11 @@
   gap: 1rem;
   border-radius: 8px;
   transition: background 0.2s ease;
+  color: var(--text-main);
 }
 
 .list-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .item-thumb {
@@ -110,7 +114,7 @@
   height: 40px;
   border-radius: 6px;
   object-fit: cover;
-  background: #1a1a1a;
+  background: #eee;
 }
 
 .item-info {
@@ -147,41 +151,43 @@
    or redefine here for isolation */
 
 .glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-soft);
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--surface-color);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
   border-radius: 16px;
   overflow: hidden;
+  box-shadow: var(--shadow-soft);
 }
 
 .dense-grid {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .dense-grid th {
   text-align: left;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.02);
   color: var(--text-dim);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   letter-spacing: 0.05rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .dense-grid td {
-  padding: 0.8rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  color: var(--text-main);
 }
 
 .title-cell {
@@ -197,10 +203,10 @@
 }
 
 .small-btn {
-  background: rgba(var(--primary-rgb, 0, 255, 136), 0.1);
-  color: var(--primary-color, #00ff88);
-  border: 1px solid rgba(var(--primary-rgb, 0, 255, 136), 0.3);
-  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
@@ -209,8 +215,8 @@
 }
 
 .small-btn:hover {
-  background: var(--primary-color, #00ff88);
-  color: #000;
+  background: var(--success-color);
+  color: #fff;
 }
 
 /* Header Section */
