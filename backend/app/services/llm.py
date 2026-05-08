@@ -16,7 +16,7 @@ async def extract_product_name(title: str) -> str:
             resp = await client.post(
                 f"{base_url}/chat/completions",
                 json={
-                    "model": "local-model",
+                    "model": "google/gemma-4-e4b",
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.1
                 }

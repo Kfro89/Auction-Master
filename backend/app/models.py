@@ -67,6 +67,7 @@ class Item(Base):
     
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")
+    valuation = relationship("Valuation", back_populates="item", uselist=False)
 
 
 class ConditionMap(Base):
@@ -100,3 +101,5 @@ class Valuation(Base):
     max_bid_for_target_roi = Column(Float)
     target_roi_pct = Column(Float)
     computed_at = Column(DateTime)
+
+    item = relationship("Item", back_populates="valuation")

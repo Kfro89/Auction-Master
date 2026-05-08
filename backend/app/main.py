@@ -6,7 +6,7 @@ from . import models
 # For now, we'll let Alembic handle migrations, but ensure tables are created
 # Base.metadata.create_all(bind=engine)
 
-from .routers import admin
+from .routers import admin, items
 from .services.valuation_worker import process_pending_valuations
 from .database import SessionLocal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 app = FastAPI(title="Auction Arbitrage API")
 
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(items.router, prefix="/api/items", tags=["items"])
 
 @app.on_event("startup")
 async def start_scheduler():
