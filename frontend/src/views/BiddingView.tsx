@@ -25,8 +25,10 @@ const BiddingView: React.FC = () => {
   const fetchItems = async () => {
     try {
       const response = await fetch('/api/items/');
-      const data = await response.json();
-      setItems(data.filter((item: Item) => item.is_user_bidding));
+      if (response.ok) {
+        const data = await response.json();
+        setItems(data.filter((item: Item) => item.is_user_bidding));
+      }
     } catch (error) {
       console.error('Failed to fetch bidding items:', error);
     } finally {
@@ -81,17 +83,28 @@ const BiddingView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {items.map(item => (
+            {items.map(item => {
+              let roi: number | null = null;
+              if (item.valuation) {
+                if (item.current_bid > 0) {
+                  roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+                } else {
+                  roi = Infinity;
+                }
+              }
+
+              return (
               <tr key={item.id} className="bidding-row">
                 <td><img src={item.image_url || '/placeholder.png'} width="30" height="30" alt="" /></td>
                 <td className="title-cell" title={item.title}>{item.title}</td>
                 <td>{item.lot_number}</td>
                 <td className="bid-cell">${item.current_bid}</td>
                 <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                <td>{item.valuation ? `${Math.round(item.valuation.target_roi_pct * 100)}%` : '--'}</td>
+                <td>{roi !== null ? (roi === Infinity ? '∞%' : `${Math.round(roi)}%`) : '--'}</td>
                 <td>{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </section>
