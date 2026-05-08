@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './BiddingView.css';
+import { useSortableData } from '../hooks/useSortableData';
+import { ArrowUpDown } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -54,6 +56,29 @@ const BiddingView: React.FC = () => {
     });
   }, [items]);
 
+  const itemsWithComputedRoi = useMemo(() => {
+    return items.map(item => {
+      let roi = null;
+      if (item.valuation) {
+        if (item.current_bid > 0) {
+          roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+        } else {
+          roi = Infinity;
+        }
+      }
+      return { ...item, computedRoi: roi };
+    });
+  }, [items]);
+
+  const { items: sortedItems, requestSort, sortConfig } = useSortableData(itemsWithComputedRoi);
+
+  const renderSortIcon = (key: string) => {
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? <span className="sort-icon asc">↑</span> : <span className="sort-icon desc">↓</span>;
+    }
+    return <ArrowUpDown size={14} className="sort-icon neutral" />;
+  };
+
   if (loading) return <div className="loading">Loading active bids...</div>;
 
   return (
@@ -70,43 +95,34 @@ const BiddingView: React.FC = () => {
       </header>
 
       <section className="grid-section">
-        <table className="dense-grid">
-          <thead>
-            <tr>
-              <th>Img</th>
-              <th>Title</th>
-              <th>Lot</th>
-              <th>Your Bid</th>
-              <th>Max Bid</th>
-              <th>ROI</th>
-              <th>Ends</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map(item => {
-              let roi: number | null = null;
-              if (item.valuation) {
-                if (item.current_bid > 0) {
-                  roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
-                } else {
-                  roi = Infinity;
-                }
-              }
-
-              return (
-              <tr key={item.id} className="bidding-row">
-                <td><img src={item.image_url || '/placeholder.png'} width="30" height="30" alt="" /></td>
-                <td className="title-cell" title={item.title}>{item.title}</td>
-                <td>{item.lot_number}</td>
-                <td className="bid-cell">${item.current_bid}</td>
-                <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                <td>{roi !== null ? (roi === Infinity ? '∞%' : `${Math.round(roi)}%`) : '--'}</td>
-                <td>{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        <div className="glass-panel">
+          <table className="dense-grid">
+            <thead>
+              <tr>
+                <th>Img</th>
+                <th onClick={() => requestSort('title')} className="sortable">Title {renderSortIcon('title')}</th>
+                <th onClick={() => requestSort('lot_number')} className="sortable">Lot {renderSortIcon('lot_number')}</th>
+                <th onClick={() => requestSort('current_bid')} className="sortable">Your Bid {renderSortIcon('current_bid')}</th>
+                <th onClick={() => requestSort('valuation.max_bid_for_target_roi')} className="sortable">Max Bid {renderSortIcon('valuation.max_bid_for_target_roi')}</th>
+                <th onClick={() => requestSort('computedRoi')} className="sortable">ROI {renderSortIcon('computedRoi')}</th>
+                <th onClick={() => requestSort('end_time')} className="sortable">Ends {renderSortIcon('end_time')}</th>
               </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedItems.map(item => (
+                <tr key={item.id} className="bidding-row">
+                  <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
+                  <td className="title-cell" title={item.title}>{item.title}</td>
+                  <td className="mono">{item.lot_number}</td>
+                  <td className="bid-cell">${item.current_bid}</td>
+                  <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
+                  <td>{item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}</td>
+                  <td className="timer-text">{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

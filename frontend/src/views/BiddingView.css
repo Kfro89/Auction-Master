@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  padding: 1.5rem;
 }
 
 .summary-section {
@@ -11,30 +12,31 @@
 
 .summary-card.glass {
   flex: 1;
-  background: var(--glass-bg);
+  background: var(--surface-color);
   backdrop-filter: var(--glass-blur);
-  padding: 1.5rem;
+  padding: 2rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: var(--shadow-deep);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-soft);
 }
 
 .summary-card h2 {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .summary-stat {
-  font-size: 2rem;
+  font-size: 2.5rem;
   font-weight: 800;
   color: var(--primary-color);
 }
 
 .bidding-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .bid-cell {
