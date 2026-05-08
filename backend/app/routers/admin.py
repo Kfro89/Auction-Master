@@ -7,6 +7,7 @@ from ..services.ingestion import ingest_auctioneer_software
 from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, Setting
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
+from ..services.ebay_store import EbayStoreClient
 from ..services.valuation import calculate_valuation, run_item_valuation
 
 router = APIRouter()
@@ -64,3 +65,19 @@ async def valuate_item(item_id: int, db: Session = Depends(get_db)):
         return valuation
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/store/stats")
+async def get_store_stats():
+    client_id = os.getenv("EBAY_CLIENT_ID", "dummy")
+    client_secret = os.getenv("EBAY_CLIENT_SECRET", "dummy")
+    auth_client = EbayAuthClient(client_id, client_secret)
+    store_client = EbayStoreClient(auth_client)
+    return await store_client.get_sales_stats()
+
+@router.get("/store/listings")
+async def get_store_listings():
+    client_id = os.getenv("EBAY_CLIENT_ID", "dummy")
+    client_secret = os.getenv("EBAY_CLIENT_SECRET", "dummy")
+    auth_client = EbayAuthClient(client_id, client_secret)
+    store_client = EbayStoreClient(auth_client)
+    return await store_client.get_active_listings()
