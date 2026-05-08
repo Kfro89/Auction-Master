@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './ResearchView.css';
+import { useSortableData } from '../hooks/useSortableData';
+import Modal from '../components/Modal';
+import Tooltip from '../components/Tooltip';
+import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -64,6 +68,13 @@ const ResearchView: React.FC = () => {
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [targetRoi, setTargetRoi] = useState<number>(30);
 
+  // Modal State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+
+  // Filter State
+  const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
+
   const fetchItems = async () => {
     try {
       const response = await fetch('/api/items/');
@@ -123,18 +134,75 @@ const ResearchView: React.FC = () => {
     }
   };
 
-  const highRoiItems = useMemo(() => {
-    return items
-      .filter(item => item.valuation && item.valuation.est_market_value > item.current_bid)
-      .sort((a, b) => {
-        const costA = a.current_bid > 0 ? a.current_bid : 1;
-        const costB = b.current_bid > 0 ? b.current_bid : 1;
-        const roiA = ((a.valuation?.est_market_value || 0) - costA) / costA;
-        const roiB = ((b.valuation?.est_market_value || 0) - costB) / costB;
-        return roiB - roiA;
-      })
-      .slice(0, 5);
+  // KPI Calculations
+  const kpis = useMemo(() => {
+    const now = new Date();
+    const todayEnd = new Date(now).setHours(23, 59, 59, 999);
+    const tomorrowEnd = new Date(now);
+    tomorrowEnd.setDate(now.getDate() + 1);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+    const weekEnd = new Date(now);
+    weekEnd.setDate(now.getDate() + 7);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const result = {
+      today: 0,
+      tomorrow: 0,
+      week: 0
+    };
+
+    items.forEach(item => {
+      const end = new Date(item.end_time).getTime();
+      if (end <= todayEnd) result.today++;
+      if (end > todayEnd && end <= tomorrowEnd.getTime()) result.tomorrow++;
+      if (end <= weekEnd.getTime()) result.week++;
+    });
+
+    return result;
   }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const now = new Date();
+    const todayEnd = new Date(now).setHours(23, 59, 59, 999);
+    const tomorrowEnd = new Date(now);
+    tomorrowEnd.setDate(now.getDate() + 1);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+    const weekEnd = new Date(now);
+    weekEnd.setDate(now.getDate() + 7);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    return items.filter(item => {
+      const end = new Date(item.end_time).getTime();
+      if (filter === 'today') return end <= todayEnd;
+      if (filter === 'tomorrow') return end > todayEnd && end <= tomorrowEnd.getTime();
+      if (filter === 'week') return end <= weekEnd.getTime();
+      return true;
+    });
+  }, [items, filter]);
+
+  // Map items to include a flat ROI percentage for easier sorting
+  const itemsWithComputedRoi = useMemo(() => {
+    return filteredItems.map(item => {
+      let roi = null;
+      if (item.valuation) {
+        if (item.current_bid > 0) {
+          roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+        } else {
+          roi = Infinity;
+        }
+      }
+      return { ...item, computedRoi: roi };
+    });
+  }, [filteredItems]);
+
+  const { items: sortedItems, requestSort, sortConfig } = useSortableData(itemsWithComputedRoi);
+
+  const renderSortIcon = (key: string) => {
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? <span className="sort-icon asc">↑</span> : <span className="sort-icon desc">↓</span>;
+    }
+    return <ArrowUpDown size={14} className="sort-icon neutral" />;
+  };
 
   if (loading) return <div className="loading">Loading items...</div>;
 
@@ -150,55 +218,59 @@ const ResearchView: React.FC = () => {
             <label>Target ROI: </label>
             <input 
               type="number" 
+              className="frosted-input"
               value={targetRoi} 
               onChange={(e) => setTargetRoi(Number(e.target.value))}
               min="0"
               max="500"
-              style={{ width: '60px', background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '4px', borderRadius: '4px' }}
             />
             %
           </div>
-          <button 
-            className={`action-btn glass ${scraping.whitley ? 'loading' : ''}`}
-            onClick={() => handleScrape('whitley')}
-            disabled={scraping.whitley}
-          >
-            {scraping.whitley ? <span className="spinner"></span> : null}
-            Scrape Whitley
-          </button>
-          <button 
-            className={`action-btn glass ${scraping.roller ? 'loading' : ''}`}
-            onClick={() => handleScrape('roller')}
-            disabled={scraping.roller}
-          >
-            {scraping.roller ? <span className="spinner"></span> : null}
-            Scrape Roller
-          </button>
+          <Tooltip text="Refresh data from Whitley">
+            <button 
+              className={`action-btn glass ${scraping.whitley ? 'loading' : ''}`}
+              onClick={() => handleScrape('whitley')}
+              disabled={scraping.whitley}
+            >
+              {scraping.whitley ? <span className="spinner"></span> : <TrendingUp size={16}/>}
+              Scrape Whitley
+            </button>
+          </Tooltip>
+          <Tooltip text="Refresh data from Roller">
+            <button 
+              className={`action-btn glass ${scraping.roller ? 'loading' : ''}`}
+              onClick={() => handleScrape('roller')}
+              disabled={scraping.roller}
+            >
+              {scraping.roller ? <span className="spinner"></span> : <TrendingUp size={16}/>}
+              Scrape Roller
+            </button>
+          </Tooltip>
         </div>
       </header>
 
-      <section className="highlights-bar">
-        {highRoiItems.map(item => {
-          let roi: number | null = null;
-          if (item.valuation) {
-            if (item.current_bid > 0) {
-              roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
-            } else {
-              roi = Infinity;
-            }
-          }
-          
-          return (
-          <div key={item.id} className="roi-card glass-card">
-            <img src={item.image_url || '/placeholder.png'} alt="" className="roi-card-img" />
-            <div className="roi-card-info">
-              <span className="roi-badge">ROI: {roi === Infinity ? '∞%' : `${Math.round(roi || 0)}%`}</span>
-              <h3>{item.title}</h3>
-              <p>Bid: ${item.current_bid} | Max: ${item.valuation?.max_bid_for_target_roi.toFixed(2)}</p>
-            </div>
+      <section className="kpi-bar">
+        <div className={`kpi-card glass-card ${filter === 'today' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}>
+          <div className="kpi-icon-wrap"><Clock size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending Today</span>
+            <span className="kpi-value">{kpis.today} <small>Items</small></span>
           </div>
-          );
-        })}
+        </div>
+        <div className={`kpi-card glass-card ${filter === 'tomorrow' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}>
+          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending Tomorrow</span>
+            <span className="kpi-value">{kpis.tomorrow} <small>Items</small></span>
+          </div>
+        </div>
+        <div className={`kpi-card glass-card ${filter === 'week' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}>
+          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending This Week</span>
+            <span className="kpi-value">{kpis.week} <small>Items</small></span>
+          </div>
+        </div>
       </section>
 
       <section className="grid-section">
@@ -206,52 +278,55 @@ const ResearchView: React.FC = () => {
           <table className="dense-grid">
             <thead>
               <tr>
-                <th>Img</th>
-                <th>Title</th>
-                <th>Lot</th>
-                <th>Bid</th>
-                <th>Est. Market</th>
-                <th>Max Bid</th>
-                <th>ROI %</th>
-                <th>Time Remaining</th>
+                <th><ImageIcon size={14} /></th>
+                <th onClick={() => requestSort('title')} className="sortable">Title {renderSortIcon('title')}</th>
+                <th onClick={() => requestSort('lot_number')} className="sortable">Lot {renderSortIcon('lot_number')}</th>
+                <th onClick={() => requestSort('current_bid')} className="sortable">Bid {renderSortIcon('current_bid')}</th>
+                <th onClick={() => requestSort('valuation.est_market_value')} className="sortable">Est. Market {renderSortIcon('valuation.est_market_value')}</th>
+                <th onClick={() => requestSort('valuation.max_bid_for_target_roi')} className="sortable">Max Bid {renderSortIcon('valuation.max_bid_for_target_roi')}</th>
+                <th onClick={() => requestSort('computedRoi')} className="sortable">ROI % {renderSortIcon('computedRoi')}</th>
+                <th onClick={() => requestSort('end_time')} className="sortable">Time Remaining {renderSortIcon('end_time')}</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map(item => {
-                let roi: number | null = null;
-                if (item.valuation) {
-                  if (item.current_bid > 0) {
-                    roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
-                  } else {
-                    roi = Infinity;
-                  }
-                }
+              {sortedItems.map(item => {
                 const isValuating = valuatingItems.has(item.id);
-                const isHighRoi = roi !== null && roi > 25;
+                const isHighRoi = item.computedRoi !== null && item.computedRoi > 25;
                 
                 return (
                   <tr key={item.id} className={isHighRoi ? 'high-profit' : ''}>
-                    <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
-                    <td className="title-cell" title={item.title}>{item.title}</td>
+                    <td>
+                      <img 
+                        src={item.image_url || '/placeholder.png'} 
+                        className="grid-thumb clickable-img" 
+                        alt="" 
+                        onClick={() => setSelectedImage(item.image_url)}
+                      />
+                    </td>
+                    <td className="title-cell clickable-title" onClick={() => setSelectedUrl(item.url)}>
+                      {item.title} <ExternalLink size={12} className="inline-icon"/>
+                    </td>
                     <td className="mono">{item.lot_number}</td>
                     <td className="bold">${item.current_bid}</td>
                     <td>{item.valuation ? `$${item.valuation.est_market_value.toFixed(2)}` : '--'}</td>
                     <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
                     <td className={isHighRoi ? 'roi-text-high' : ''}>
-                      {roi !== null ? (roi === Infinity ? '∞%' : `${Math.round(roi)}%`) : '--'}
+                      {item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}
                     </td>
                     <td className="timer-cell">
                       <CountdownTimer endTime={item.end_time} />
                     </td>
                     <td>
-                      <button 
-                        className={`small-btn ${isValuating ? 'loading' : ''}`}
-                        onClick={() => handleValuate(item.id)}
-                        disabled={isValuating}
-                      >
-                        {isValuating ? '...' : 'Valuate'}
-                      </button>
+                      <Tooltip text="Request LLM valuation">
+                        <button 
+                          className={`small-btn ${isValuating ? 'loading' : ''}`}
+                          onClick={() => handleValuate(item.id)}
+                          disabled={isValuating}
+                        >
+                          {isValuating ? '...' : 'Valuate'}
+                        </button>
+                      </Tooltip>
                     </td>
                   </tr>
                 );
@@ -260,6 +335,14 @@ const ResearchView: React.FC = () => {
           </table>
         </div>
       </section>
+
+      <Modal isOpen={!!selectedImage} onClose={() => setSelectedImage(null)} size="lg">
+        {selectedImage && <img src={selectedImage} alt="Enlarged view" className="lightbox-img" />}
+      </Modal>
+
+      <Modal isOpen={!!selectedUrl} onClose={() => setSelectedUrl(null)} size="full">
+        {selectedUrl && <iframe src={selectedUrl} className="iframe-modal" title="Auction Page" />}
+      </Modal>
     </div>
   );
 };
