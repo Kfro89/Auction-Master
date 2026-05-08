@@ -20,11 +20,19 @@ Raw data, capture notes, and schema structures for individual sources:
 - **[Whitley Auction.md](./Whitley%20Auction.md)**
 - **[Roller Auction.md](./Roller%20Auction.md)**
 
-## 💎 Phase 3: Valuation Engine (Active Implementation)
-Current focus area for automated market analysis and ROI calculation:
-- **[superpowers/specs/2026-05-08-valuation-engine-design.md](./superpowers/specs/2026-05-08-valuation-engine-design.md)**: Design specification for the automated valuation workflow.
-- **[superpowers/plans/2026-05-08-ebay-valuation-engine.md](./superpowers/plans/2026-05-08-ebay-valuation-engine.md)**: Implementation plan for Task 1-5 (Models, OAuth, Search, Math).
-- **[superpowers/plans/2026-05-08-valuation-engine.md](./superpowers/plans/2026-05-08-valuation-engine.md)**: Plan for Task 6+ (LLM Keyword Extraction, Background Worker, Frontend).
+## 💎 Phase 3: Valuation Engine (Complete)
+Automated market analysis and ROI calculation:
+- **[superpowers/specs/2026-05-08-valuation-engine-design.md](./superpowers/specs/2026-05-08-valuation-engine-design.md)**: Design specification.
+- **[superpowers/plans/2026-05-08-ebay-valuation-engine.md](./superpowers/plans/2026-05-08-ebay-valuation-engine.md)** & **[superpowers/plans/2026-05-08-valuation-engine.md](./superpowers/plans/2026-05-08-valuation-engine.md)**: Implementation plans.
+
+## 🖥 Phase 4-6: ERP Suite & Frontend (Complete)
+Designs and implementation plans for the comprehensive web interface, staging workflows, and analytics:
+- **[superpowers/specs/2026-05-08-auction-master-erp-design.md](./superpowers/specs/2026-05-08-auction-master-erp-design.md)**: Overarching architectural design for the multi-tab ERP suite.
+- **[superpowers/specs/2026-05-08-frontend-dashboard-design.md](./superpowers/specs/2026-05-08-frontend-dashboard-design.md)**: Initial dashboard design.
+- **[superpowers/plans/2026-05-08-glass-shell-layout.md](./superpowers/plans/2026-05-08-glass-shell-layout.md)**: Phase 4.1 Plan.
+- **[superpowers/plans/2026-05-08-research-tab-implementation.md](./superpowers/plans/2026-05-08-research-tab-implementation.md)**: Phase 4.2 Plan.
+- **[superpowers/plans/2026-05-08-work-queue-implementation.md](./superpowers/plans/2026-05-08-work-queue-implementation.md)**: Phase 5 Plan.
+- **[superpowers/plans/2026-05-08-store-analytics-implementation.md](./superpowers/plans/2026-05-08-store-analytics-implementation.md)**: Phase 6 Plan.
 
 ---
 

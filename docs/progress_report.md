@@ -36,6 +36,16 @@ We have successfully completed **Phase 0 (Research)**, **Phase 1 (Scaffolding)**
 
 ---
 
+## Major Changes & Course Corrections (Evolution to ERP)
+Over the course of Phases 4-6, the project underwent a significant evolution in scope and architecture:
+1. **Scope Expansion (CLI to ERP):** Initially conceived as a backend-heavy scraping tool with a basic dashboard, the project was vastly expanded into a full "Auction Master ERP Suite" to handle the entire business lifecycle: Discovery, Bidding, Staging, and Sales.
+2. **UI Architecture (Glass Shell):** Adopted a modern, premium "Glass Master" aesthetic featuring a collapsible left navigation pane with `backdrop-filter` blurs, dark-mode themes, and tactile noise backgrounds.
+3. **Hybrid Staging Workflow:** Introduced the "Work Queue" to bridge the physical and digital gap, allowing mobile-friendly barcode scanning (UPC/EAN) to trigger fallback eBay lookups when local research data is missing.
+4. **AI-Driven Listing Generation:** Integrated local LLM capabilities not just for title cleaning (Phase 3) but also for generating complete SEO-optimized eBay drafts (titles and descriptions) in the Work Queue (Phase 5).
+5. **eBay API Broadening:** Expanded from just the Browse API (for valuation) to include structural implementations for Store/Analytics and Trading API integration to support full seller dashboards.
+
+---
+
 ## Next Steps
 
 ### Phase 7: Polish & Production Readiness
