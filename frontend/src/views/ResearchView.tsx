@@ -91,7 +91,8 @@ const ResearchView: React.FC = () => {
 
   // Filter State
   const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [parentCategoryFilter, setParentCategoryFilter] = useState<string>('');
+  const [subCategoryFilter, setSubCategoryFilter] = useState<string>('');
   const [tagFilter, setTagFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -256,13 +257,17 @@ const ResearchView: React.FC = () => {
       }
 
       let passesCategory = true;
-      if (categoryFilter) {
-        passesCategory = item.category === categoryFilter;
+      if (parentCategoryFilter) {
+        if (subCategoryFilter) {
+          passesCategory = item.category === `${parentCategoryFilter} > ${subCategoryFilter}`;
+        } else {
+          passesCategory = item.category === parentCategoryFilter || (item.category?.startsWith(parentCategoryFilter + ' >') ?? false);
+        }
       }
 
       return passesDateFilter && passesSearch && passesTag && passesCategory;
     });
-  }, [items, filter, searchQuery, tagFilter, categoryFilter]);
+  }, [items, filter, searchQuery, tagFilter, parentCategoryFilter, subCategoryFilter]);
 
   // Map items to include a flat ROI percentage for easier sorting
   const itemsWithComputedRoi = useMemo(() => {
@@ -287,12 +292,33 @@ const ResearchView: React.FC = () => {
     return Array.from(tags).sort();
   }, [items]);
 
-  const uniqueCategories = useMemo(() => {
-    const categories = new Set<string>();
+  const { parentCategories, subCategoriesMap } = useMemo(() => {
+    const parents = new Set<string>();
+    const subsMap = new Map<string, Set<string>>();
+
     items.forEach(item => {
-      if (item.category) categories.add(item.category);
+      if (item.category) {
+        const parts = item.category.split(' > ');
+        const parent = parts[0];
+        const sub = parts.length > 1 ? parts[1] : null;
+
+        parents.add(parent);
+        if (sub) {
+          if (!subsMap.has(parent)) {
+            subsMap.set(parent, new Set<string>());
+          }
+          subsMap.get(parent)!.add(sub);
+        }
+      }
     });
-    return Array.from(categories).sort();
+
+    const parentArray = Array.from(parents).sort();
+    const subsObject: Record<string, string[]> = {};
+    for (const [parent, subs] of subsMap.entries()) {
+      subsObject[parent] = Array.from(subs).sort();
+    }
+
+    return { parentCategories: parentArray, subCategoriesMap: subsObject };
   }, [items]);
 
 
@@ -388,12 +414,26 @@ const ResearchView: React.FC = () => {
             />
             <select 
               className="saas-input"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              value={parentCategoryFilter}
+              onChange={(e) => {
+                setParentCategoryFilter(e.target.value);
+                setSubCategoryFilter('');
+              }}
             >
               <option value="">All Categories</option>
-              {uniqueCategories.map(cat => (
+              {parentCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <select 
+              className="saas-input"
+              value={subCategoryFilter}
+              onChange={(e) => setSubCategoryFilter(e.target.value)}
+              disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
+            >
+              <option value="">All Sub-Categories</option>
+              {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
               ))}
             </select>
             <select 
