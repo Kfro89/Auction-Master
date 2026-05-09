@@ -1,8 +1,10 @@
 import asyncio
 import os
 import json
-from backend.app.services.llm import classify_item
+import pytest
+from app.services.llm import classify_item
 
+@pytest.mark.asyncio
 async def test_classification():
     test_items = [
         {

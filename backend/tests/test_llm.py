@@ -1,5 +1,8 @@
+import os
 import pytest
 from app.services.llm import extract_product_name
+
+os.environ["LLM_BASE_URL"] = "http://localhost:1234/v1"
 
 @pytest.mark.asyncio
 async def test_extract_product_name(httpx_mock):

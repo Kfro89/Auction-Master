@@ -123,7 +123,6 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 if not end_time and a_end_time:
                     # Fallback to auction end time if lot end time is missing
                     end_time = a_end_time
-
                 # Extract Image URL
                 primary_image = lot.get('primary_image') or lot.get('primaryImage', {})
                 image_url = None
@@ -138,10 +137,9 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     high_bidder_id = str(lot.get('highBidderId') or lot.get('high_bidder_id', ''))
                     if high_bidder_id in user_bidder_ids:
                         is_user_bidding = True
-                        
+
                 category_id = str(lot.get('category_id') or '')
                 description = lot.get('description', '')
-
                 if not item:
                     item = Item(
                         auction_house_id=house.id,
@@ -174,6 +172,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     item.image_url = image_url
                     item.last_seen_at = datetime.now(timezone.utc)
                     item.is_user_bidding = is_user_bidding
+
                     
                     if not item.category and category_id:
                         item.category = category_id

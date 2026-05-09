@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/")
 async def list_items(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     # Fetch items with their valuations
-    items = db.query(Item).options(joinedload(Item.valuation)).order_by(Item.end_time.asc()).all()
+    items = db.query(Item).options(joinedload(Item.valuation)).order_by(Item.end_time.asc()).limit(100).all()
     
     result = []
     for item in items:
@@ -38,8 +38,5 @@ async def list_items(db: Session = Depends(get_db), current_user: str = Depends(
             }
             
         result.append(item_dict)
-        
-    return result
-    result.append(item_dict)
         
     return result

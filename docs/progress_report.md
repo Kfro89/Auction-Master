@@ -53,8 +53,11 @@ Over the course of Phases 4-7, the project underwent a significant evolution in 
 Following the completion of the core phases, several critical stability and accuracy improvements were made:
 - **Frontend Authentication Interceptor:** Fixed an issue where the frontend crashed due to unhandled 401 errors. A global fetch interceptor now securely attaches the JWT token to all `/api/` requests and safely redirects to the login view on session expiration.
 - **Accurate Bid Extraction:** Discovered that Apollo GraphQL state hides active bids in various fields depending on auction state (`winning_bid_amount`, `starting_bid`, `price`, `required_bid`). The scraper was overhauled to aggressively check these fields to extract the true current bid instead of defaulting to $0.
+<<<<<<< ours
 - **Auction Timing Fix:** Resolved a critical issue where all items displayed "Ending Now" due to incorrect date field keys in the ingestion service. Switched to `end_time` (with `endDate`/`end_date` fallbacks) and migrated the database to `TIMESTAMPTZ` to ensure timezone-aware UTC consistency across the stack.
 - **Full Auction Ingestion (Pagination):** Upgraded the `AuctioneerSoftwareScraper` to handle multi-page auctions. It now detects total lot counts and automatically iterates through all pages (using `?page=N`), ensuring that large auctions are ingested in their entirety rather than being limited to the first 50 items.
+=======
+>>>>>>> theirs
 - **Image Ingestion:** Corrected the ingestion service to accurately extract and persist high-quality thumbnail images (`primary_image.url`, `small`, `thumb`) from the auctioneer software platforms.
 - **Dynamic ROI & Mathematical Accuracy:** Overhauled the frontend ROI calculation to accurately project profit margins based on true Cost (Current Bid) vs Estimated Market Value, rather than the target max bid. Added divide-by-zero protection for items with no starting bids.
 - **Configurable Target ROI:** Upgraded the Research View with a dynamic user-configurable Target ROI setting, passing the variable directly to the valuation engine backend to recalculate max bids on the fly.
@@ -69,4 +72,15 @@ Following the completion of the core phases, several critical stability and accu
 - **Continuous Integration (CI):** Implement a CI/CD pipeline to automate testing and deployment for future updates.
 
 
-\n### 8. Frosted Alabaster UI Rework (Phase 8)\n- Completely overhauled the UI from dark/textured to a light-mode "Frosted Alabaster" aesthetic.\n- Implemented dynamic KPI filtering (Today, Tomorrow, This Week) in the Research View.\n- Replaced all emojis with professional `lucide-react` icons.\n- Added sortable column headers to tables via a new `useSortableData` custom hook.\n- Created reusable `Modal` and `Tooltip` components to enhance interactivity (Image Lightboxes and Iframe previews).
+### 8. Frosted Alabaster UI Rework (Phase 8)
+- Completely overhauled the UI from dark/textured to a light-mode "Frosted Alabaster" aesthetic.
+- Implemented dynamic KPI filtering (Today, Tomorrow, This Week) in the Research View.
+- Replaced all emojis with professional `lucide-react` icons.
+- Added sortable column headers to tables via a new `useSortableData` custom hook.
+- Created reusable `Modal` and `Tooltip` components to enhance interactivity (Image Lightboxes and Iframe previews).
+
+### 9. SaaS Command Center UI Rework (Phase 9)
+- Transitioned the frontend to an "Ultra-Minimalist SaaS Command Center".
+- Relies heavily on a central Command Palette for navigation and actions.
+- Introduced edge-to-edge content areas, maximizing whitespace and clarity.
+- Utilizes the Inter font and a single Emerald accent color.
