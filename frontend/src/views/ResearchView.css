@@ -502,3 +502,14 @@
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.2);
 }
+
+
+/* Hide number input arrows */
+input[type="number"].saas-input::-webkit-inner-spin-button,
+input[type="number"].saas-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"].saas-input {
+  -moz-appearance: textfield;
+}

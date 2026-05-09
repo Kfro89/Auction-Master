@@ -84,7 +84,8 @@ const ResearchView: React.FC = () => {
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
   const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
-  const [targetRoi, setTargetRoi] = useState<number>(30);
+  const [targetRoi, setTargetRoi] = useState<number>(() => parseInt(localStorage.getItem('targetRoi') || '30', 10));
+  React.useEffect(() => { localStorage.setItem('targetRoi', targetRoi.toString()); }, [targetRoi]);
 
   // Modal State
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

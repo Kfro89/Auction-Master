@@ -53,6 +53,20 @@ const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
 };
 
 const WatchListView: React.FC = () => {
+  const targetRoi = parseInt(localStorage.getItem('targetRoi') || '30', 10);
+  
+  const getRoiValue = (valuation: any, current_bid: number) => {
+    if (!valuation) return null;
+    if (current_bid > 0) return ((valuation.est_market_value - current_bid) / current_bid) * 100;
+    return Infinity;
+  };
+  
+  const getRoiClass = (roi: number | null) => {
+    if (roi === null) return '';
+    if (roi >= targetRoi) return 'roi-good';
+    if (roi >= targetRoi - 10) return 'roi-warning';
+    return 'roi-neutral';
+  };
   const [items, setItems] = useState<WatchedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<WatchedItem | null>(null);
@@ -74,7 +88,7 @@ const WatchListView: React.FC = () => {
     }, 2000);
 
     try {
-      const targetRoi = 30; // Defaulting to 30% for watch list re-valuation
+      const targetRoi = parseInt(localStorage.getItem('targetRoi') || '30', 10);
       const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
       if (response.ok) {
         const newValuation = await response.json();
@@ -195,12 +209,18 @@ const WatchListView: React.FC = () => {
                         <span className="metric-label">Max Bid</span>
                         <span className="metric-value text-blue-600">${item.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
                       </div>
+                      <div className="watch-metric">
+                        <span className="metric-label">ROI %</span>
+                        <span className={`roi-badge ${getRoiClass(getRoiValue(item.valuation, item.current_bid))}`} style={{ width: 'fit-content', marginTop: '2px' }}>
+                          {getRoiValue(item.valuation, item.current_bid) === Infinity ? '∞%' : `${Math.round(getRoiValue(item.valuation, item.current_bid)!)}%`}
+                        </span>
+                      </div>
                     </>
                   )}
                 </div>
                 
                 <div className="watch-actions">
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="external-link">
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="glass-pill-btn blue" onClick={e => e.stopPropagation()} style={{ textDecoration: 'none' }}>
                     View Auction <ExternalLink size={14} />
                   </a>
                 </div>
@@ -247,6 +267,12 @@ const WatchListView: React.FC = () => {
                       <span className="stat-label"><TrendingUp size={14}/> Max Bid</span>
                       <span className="stat-value text-blue-600 font-bold">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
                     </div>
+                    <div className="watch-detail-stat">
+                      <span className="stat-label"><TrendingUp size={14}/> ROI %</span>
+                      <span className={`roi-badge ${getRoiClass(getRoiValue(selectedItem.valuation, selectedItem.current_bid))}`}>
+                        {getRoiValue(selectedItem.valuation, selectedItem.current_bid) === Infinity ? '∞%' : `${Math.round(getRoiValue(selectedItem.valuation, selectedItem.current_bid)!)}%`}
+                      </span>
+                    </div>
                   </>
                 )}
               </div>
@@ -278,7 +304,7 @@ const WatchListView: React.FC = () => {
                     </div>
                   ) : (
                     <button 
-                      className="glass-pill-btn"
+                      className="glass-pill-btn green"
                       style={{ marginBottom: '12px', width: '100%', justifyContent: 'center' }}
                       onClick={() => handleValuate(selectedItem.id)}
                       disabled={valuatingItems.has(selectedItem.id)}
@@ -286,7 +312,7 @@ const WatchListView: React.FC = () => {
                       Re-Valuate
                     </button>
                   )}
-                <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="action-btn">
+                <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-pill-btn blue" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
                   View Full Auction <ExternalLink size={16} />
                 </a>
               </div>

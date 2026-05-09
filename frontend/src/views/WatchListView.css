@@ -310,12 +310,7 @@
   transition: all 0.2s ease;
 }
 
-.glass-pill-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(37, 99, 235, 0.3);
-}
+
 
 .glass-pill-btn:active:not(:disabled) {
   transform: scale(0.97);
@@ -325,4 +320,40 @@
 .glass-pill-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.glass-pill-btn.blue {
+  color: var(--primary-color);
+}
+.glass-pill-btn.blue:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.3);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.15);
+}
+
+.glass-pill-btn.green {
+  color: var(--success-color, #10b981);
+}
+.glass-pill-btn.green:hover:not(:disabled) {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.15);
+}
+
+/* ROI Highlighting */
+.roi-badge {
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.roi-badge.roi-good {
+  background-color: #ECFDF5;
+  color: #059669;
+}
+.roi-badge.roi-warning {
+  background-color: #FEF3C7;
+  color: #D97706;
+}
+.roi-badge.roi-neutral {
+  background-color: #F3F4F6;
+  color: #374151;
 }
