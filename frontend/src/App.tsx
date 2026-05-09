@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import Navigation from './components/Navigation';
+import CommandPalette from './components/CommandPalette';
 import ResearchView from './views/ResearchView';
 import SettingsView from './views/SettingsView';
 import BiddingView from './views/BiddingView';
@@ -11,6 +12,18 @@ import LoginView from './views/LoginView';
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
   const [activeTab, setActiveTab] = useState('research');
+  const [isCmdOpen, setIsCmdOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCmdOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!token) {
     return <LoginView onLogin={setToken} />;
@@ -19,7 +32,7 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'research':
-        return <ResearchView setSidebarContent={() => {}} />;
+        return <ResearchView />;
       case 'bidding':
         return <BiddingView />;
       case 'work-queue':
@@ -35,13 +48,18 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Navigation 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
+      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="main-content">
+        <div className="cmd-hint" onClick={() => setIsCmdOpen(true)}>
+          Press ⌘K to open Command Palette
+        </div>
         {renderContent()}
       </main>
+      <CommandPalette 
+        isOpen={isCmdOpen} 
+        onClose={() => setIsCmdOpen(false)} 
+        onNavigate={setActiveTab} 
+      />
     </div>
   );
 }
