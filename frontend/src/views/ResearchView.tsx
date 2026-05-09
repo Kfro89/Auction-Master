@@ -3,7 +3,7 @@ import './ResearchView.css';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
-import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Filter, Tag, Search } from 'lucide-react';
+import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -74,7 +74,7 @@ const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
   return <span className={`timer-text ${timeLeft === 'Ending Now' ? 'ending-now' : ''}`}>{timeLeft}</span>;
 };
 
-const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) => void }> = ({ setSidebarContent }) => {
+const ResearchView: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState<{ [key: string]: boolean }>({ whitley: false, roller: false });
@@ -268,11 +268,11 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
           <p>Real-time arbitrage opportunities from top auction houses.</p>
         </div>
         <div className="header-actions">
-          <div className="roi-setting glass">
+          <div className="roi-setting">
             <label>Target ROI: </label>
             <input 
               type="number" 
-              className="frosted-input"
+              className="saas-input"
               value={targetRoi} 
               onChange={(e) => setTargetRoi(Number(e.target.value))}
               min="0"
@@ -282,7 +282,7 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
           </div>
           <Tooltip text="Refresh data from Whitley">
             <button 
-              className={`action-btn glass ${scraping.whitley ? 'loading' : ''}`}
+              className={`action-btn ${scraping.whitley ? 'loading' : ''}`}
               onClick={() => handleScrape('whitley')}
               disabled={scraping.whitley}
             >
@@ -304,21 +304,21 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
       </header>
 
       <section className="kpi-bar">
-        <div className={`kpi-card glass-card ${filter === 'today' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}>
+        <div className={`kpi-card ${filter === 'today' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}>
           <div className="kpi-icon-wrap"><Clock size={24} className="kpi-icon"/></div>
           <div className="kpi-info">
             <span className="kpi-label">Ending Today</span>
             <span className="kpi-value">{kpis.today} <small>Items</small></span>
           </div>
         </div>
-        <div className={`kpi-card glass-card ${filter === 'tomorrow' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}>
+        <div className={`kpi-card ${filter === 'tomorrow' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}>
           <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
           <div className="kpi-info">
             <span className="kpi-label">Ending Tomorrow</span>
             <span className="kpi-value">{kpis.tomorrow} <small>Items</small></span>
           </div>
         </div>
-        <div className={`kpi-card glass-card ${filter === 'week' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}>
+        <div className={`kpi-card ${filter === 'week' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}>
           <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
           <div className="kpi-info">
             <span className="kpi-label">Ending This Week</span>
@@ -410,8 +410,12 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
                     <td className="bold">${item.current_bid}</td>
                     <td>{item.valuation ? `$${item.valuation.est_market_value.toFixed(2)}` : '--'}</td>
                     <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                    <td className={isHighRoi ? 'roi-text-high' : ''}>
-                      {item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}
+                    <td>
+                      {item.computedRoi !== null ? (
+                        <span className="roi-badge">
+                          {item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`}
+                        </span>
+                      ) : '--'}
                     </td>
                     <td className="timer-cell">
                       <CountdownTimer endTime={item.end_time} />
