@@ -1,5 +1,6 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
+import pytz
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -15,6 +16,29 @@ from .services.valuation_worker import process_pending_valuations
 from .services.ingestion import ingest_auctioneer_software
 from .database import SessionLocal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+def prune_watchlist():
+    import logging
+    logger = logging.getLogger(__name__)
+    db: Session = SessionLocal()
+    try:
+        fourteen_days_ago = datetime.now(pytz.utc) - timedelta(days=14)
+        
+        # Find watched items that ended more than 14 days ago and update them in bulk
+        updated_count = db.query(models.Item).filter(
+            models.Item.is_watched == True,
+            models.Item.end_time < fourteen_days_ago
+        ).update({"is_watched": False}, synchronize_session=False)
+        
+        db.commit()
+        if updated_count > 0:
+            logger.info(f"Pruned {updated_count} items from the watchlist.")
+            
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error pruning watchlist: {e}")
+    finally:
+        db.close()
 
 app = FastAPI(title="Auction Arbitrage API")
 
@@ -56,6 +80,7 @@ async def start_scheduler():
             db.close()
 
     scheduler.add_job(sweep_and_valuate_job, "interval", minutes=60)
+    scheduler.add_job(prune_watchlist, 'cron', hour=0, minute=0) # Run daily at midnight UTC
     scheduler.start()
     print("Background valuation scheduler started.")
 
