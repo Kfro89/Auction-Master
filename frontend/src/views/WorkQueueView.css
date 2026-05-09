@@ -13,10 +13,13 @@
   padding: 0.5rem 1.2rem;
   border-radius: 30px;
   width: 400px;
-  background: var(--surface-color);
-  backdrop-filter: var(--glass-blur);
-  border: var(--glass-border);
-  box-shadow: var(--shadow-soft);
+}
+
+.scan-zone.glass {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
 }
 
 .scan-zone input {
@@ -29,7 +32,7 @@
 }
 
 .scan-zone input::placeholder {
-  color: var(--text-dim);
+  color: #6B7280;
 }
 
 .scan-icon {
@@ -45,6 +48,13 @@
   overflow: hidden;
 }
 
+.glass-panel {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+
 .item-list {
   width: 350px;
   display: flex;
@@ -56,9 +66,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: var(--glass-border);
+  border-bottom: 1px solid #F3F4F6;
   font-weight: 700;
-  color: var(--text-main);
+  color: #374151;
 }
 
 .count-badge {
@@ -76,21 +86,23 @@
 }
 
 .queue-item {
-  padding: 1.25rem 1rem;
-  border-bottom: var(--glass-border);
+  padding: 20px 24px;
+  border-bottom: 1px solid #F3F4F6;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  color: #374151;
+  background: transparent;
 }
 
 .queue-item:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: #F9FAFB;
 }
 
 .queue-item.selected {
-  background: rgba(37, 99, 235, 0.05);
+  background: #F9FAFB;
   border-left: 3px solid var(--primary-color);
 }
 
@@ -121,7 +133,7 @@
 .item-title {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-main);
+  color: #374151;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -132,8 +144,8 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   font-weight: bold;
-  color: var(--text-dim);
-  background: rgba(0, 0, 0, 0.05);
+  color: #6B7280;
+  background: transparent;
   padding: 4px 8px;
   border-radius: 6px;
 }
@@ -159,7 +171,7 @@
 
 .staging-header h2 {
   font-size: 1.75rem;
-  color: var(--text-main);
+  color: #374151;
   font-weight: 800;
   max-width: 60%;
 }
@@ -167,6 +179,29 @@
 .staging-actions {
   display: flex;
   gap: 1rem;
+}
+
+.action-btn {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #E5E7EB;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #F9FAFB;
+}
+
+.action-btn.primary {
+  background: #fff;
+  border: 1px solid #E5E7EB;
 }
 
 .staging-grid {
@@ -180,23 +215,28 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px dashed rgba(0, 0, 0, 0.15);
   border-radius: 16px;
   margin-bottom: 1.5rem;
   position: relative;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.5);
   transition: all 0.2s;
 }
 
+.photo-zone.glass {
+  background: transparent;
+  backdrop-filter: none;
+  border: 1px dashed #D1D5DB;
+  box-shadow: none;
+}
+
 .photo-zone:hover {
-  background: rgba(255, 255, 255, 0.8);
+  background: #F9FAFB;
   border-color: var(--primary-color);
 }
 
 .photo-placeholder {
   text-align: center;
-  color: var(--text-dim);
+  color: #6B7280;
 }
 
 .photo-input {
@@ -219,18 +259,18 @@
 
 .field-group label {
   font-size: 0.85rem;
-  color: var(--text-dim);
+  color: #6B7280;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .frosted-input-large {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border: 1px solid #E5E7EB;
   padding: 0.85rem;
   border-radius: 8px;
-  color: var(--text-main);
+  color: #374151;
   font-size: 1rem;
   transition: all 0.2s ease;
   width: 100%;
@@ -254,7 +294,7 @@ textarea.frosted-input-large {
   right: 0.5rem;
   bottom: -1.2rem;
   font-size: 0.75rem;
-  color: var(--text-dim);
+  color: #6B7280;
   font-weight: 500;
 }
 
@@ -264,7 +304,7 @@ textarea.frosted-input-large {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-dim);
+  color: #6B7280;
   text-align: center;
 }
 

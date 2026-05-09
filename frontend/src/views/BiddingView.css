@@ -10,19 +10,22 @@
   gap: 2rem;
 }
 
-.summary-card.glass {
+.summary-card {
   flex: 1;
-  background: var(--surface-color);
-  backdrop-filter: var(--glass-blur);
   padding: 2rem;
   border-radius: 12px;
-  border: var(--glass-border);
-  box-shadow: var(--shadow-soft);
+}
+
+.summary-card.glass {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
 }
 
 .summary-card h2 {
   font-size: 1rem;
-  color: var(--text-dim);
+  color: #6B7280;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 0.5rem;
@@ -35,8 +38,51 @@
   color: var(--primary-color);
 }
 
+.glass-panel {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+
+.dense-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dense-grid th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #6B7280;
+  background: transparent;
+  padding: 20px 24px;
+  border-bottom: 1px solid #F3F4F6;
+  text-align: left;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.dense-grid td {
+  color: #374151;
+  background: transparent;
+  padding: 20px 24px;
+  border-bottom: 1px solid #F3F4F6;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.bidding-row {
+  transition: background 0.2s ease;
+}
+
 .bidding-row:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: #F9FAFB;
+}
+
+.bidding-row:hover td {
+  background: transparent;
 }
 
 .bid-cell {
