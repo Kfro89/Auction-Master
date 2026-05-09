@@ -483,7 +483,7 @@ const ResearchView: React.FC = () => {
                     <td className="timer-cell">
                       <CountdownTimer endTime={item.end_time} />
                     </td>
-                    <td>
+                    <td className="watch-cell">
                       <button 
                         onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
                         className="icon-button"
@@ -492,7 +492,7 @@ const ResearchView: React.FC = () => {
                         {item.is_watched ? <Eye size={18} className="text-emerald-500" /> : <EyeOff size={18} className="text-slate-400" />}
                       </button>
                     </td>
-                    <td>
+                    <td className="actions-cell">
                       {isValuating ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                           <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />

@@ -437,3 +437,16 @@
 .tag-badge:hover {
   background: rgba(var(--primary-color-rgb), 0.3);
 }
+
+.watch-cell {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  text-align: center;
+}
+
+.actions-cell {
+  width: 170px;
+  min-width: 170px;
+  max-width: 170px;
+}
