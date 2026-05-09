@@ -299,10 +299,14 @@
 
 .title-cell {
   max-width: 250px;
-  white-space: nowrap;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 500;
+  line-height: 1.4;
 }
 
 .clickable-title {
