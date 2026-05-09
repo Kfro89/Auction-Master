@@ -8,6 +8,7 @@ import BiddingView from './views/BiddingView';
 import WorkQueueView from './views/WorkQueueView';
 import StoreView from './views/StoreView';
 import LoginView from './views/LoginView';
+import WatchListView from './views/WatchListView';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
@@ -33,6 +34,8 @@ function App() {
     switch (activeTab) {
       case 'research':
         return <ResearchView />;
+      case 'watchlist':
+        return <WatchListView />;
       case 'bidding':
         return <BiddingView />;
       case 'work-queue':
