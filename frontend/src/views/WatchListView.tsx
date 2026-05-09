@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './WatchListView.css';
-import { X, ExternalLink, CalendarDays, TrendingUp, ArrowUpDown, Gavel } from 'lucide-react';
+import { X, ExternalLink, CalendarDays, TrendingUp, ArrowUpDown, Gavel, Loader2 } from 'lucide-react';
 import Modal from '../components/Modal';
 
 interface WatchedItem {
@@ -56,6 +56,59 @@ const WatchListView: React.FC = () => {
   const [items, setItems] = useState<WatchedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<WatchedItem | null>(null);
+
+  const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
+  const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
+  const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
+
+  const handleValuate = async (itemId: number) => {
+    setValuatingItems(prev => new Set(prev).add(itemId));
+    
+    const statuses = ["Analyzing item...", "Using AI...", "Checking eBay...", "Calculating ROI..."];
+    let statusIdx = 0;
+    setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
+    
+    const interval = setInterval(() => {
+      statusIdx = (statusIdx + 1) % statuses.length;
+      setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
+    }, 2000);
+
+    try {
+      const targetRoi = 30; // Defaulting to 30% for watch list re-valuation
+      const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
+      if (response.ok) {
+        const newValuation = await response.json();
+        setItems(prev => prev.map(item => 
+          item.id === itemId ? { ...item, valuation: newValuation } : item
+        ));
+        setSelectedItem(prev => prev && prev.id === itemId ? { ...prev, valuation: newValuation } : prev);
+        setValuationErrors(prev => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      } else {
+        const errData = await response.json().catch(() => ({ detail: "Valuation failed" }));
+        setValuationErrors(prev => ({ ...prev, [itemId]: errData.detail || "Valuation failed" }));
+        console.error(`Failed to valuate item ${itemId}`);
+      }
+    } catch (error) {
+      setValuationErrors(prev => ({ ...prev, [itemId]: "Network error" }));
+      console.error(`Error valuating item ${itemId}:`, error);
+    } finally {
+      clearInterval(interval);
+      setValuatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      setValuationStatus(prev => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    }
+  };
 
   const fetchWatchlist = async () => {
     try {
@@ -199,6 +252,40 @@ const WatchListView: React.FC = () => {
               </div>
 
               <div className="watch-detail-actions">
+                  {valuatingItems.has(selectedItem.id) ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: '12px' }}>
+                      <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                      <span>{valuationStatus[selectedItem.id] || "Loading..."}</span>
+                    </div>
+                  ) : valuationErrors[selectedItem.id] ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                      <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 500 }}>
+                        {valuationErrors[selectedItem.id]}
+                      </span>
+                      <button 
+                        className="glass-pill-btn"
+                        onClick={() => {
+                          setValuationErrors(prev => {
+                            const next = { ...prev };
+                            delete next[selectedItem.id];
+                            return next;
+                          });
+                          handleValuate(selectedItem.id);
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      className="glass-pill-btn"
+                      style={{ marginBottom: '12px', width: '100%', justifyContent: 'center' }}
+                      onClick={() => handleValuate(selectedItem.id)}
+                      disabled={valuatingItems.has(selectedItem.id)}
+                    >
+                      Re-Valuate
+                    </button>
+                  )}
                 <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="action-btn">
                   View Full Auction <ExternalLink size={16} />
                 </a>
