@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './WatchListView.css';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, CalendarDays, TrendingUp, ArrowUpDown, Gavel } from 'lucide-react';
+import Modal from '../components/Modal';
 
 interface WatchedItem {
   id: number;
@@ -54,6 +55,7 @@ const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
 const WatchListView: React.FC = () => {
   const [items, setItems] = useState<WatchedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<WatchedItem | null>(null);
 
   const fetchWatchlist = async () => {
     try {
@@ -98,10 +100,13 @@ const WatchListView: React.FC = () => {
           <p className="empty-state">Your watch list is empty.</p>
         ) : (
           items.map(item => (
-            <div key={item.id} className="watch-card">
+            <div key={item.id} className="watch-card" onClick={() => setSelectedItem(item)}>
               <button 
                 className="remove-btn" 
-                onClick={() => removeFromWatchlist(item.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFromWatchlist(item.id);
+                }}
                 title="Remove from Watch List"
               >
                 <X size={16} />
@@ -151,6 +156,57 @@ const WatchListView: React.FC = () => {
           ))
         )}
       </div>
+
+      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="lg">
+        {selectedItem && (
+          <div className="watch-detail-layout">
+            <div className="watch-detail-image-panel">
+              {selectedItem.image_url ? (
+                <img 
+                  src={selectedItem.image_url.replace('/small/', '/large/').replace('/thumb/', '/large/')} 
+                  alt={selectedItem.title} 
+                  className="watch-detail-image" 
+                />
+              ) : (
+                <div className="watch-detail-no-image">No Image Available</div>
+              )}
+            </div>
+            <div className="watch-detail-info-panel">
+              <div className="watch-detail-header">
+                <h2>{selectedItem.title}</h2>
+                <div className="watch-detail-badges">
+                  <span className="watch-detail-timer"><CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} /></span>
+                </div>
+              </div>
+
+              <div className="watch-detail-stats glass-panel">
+                <div className="watch-detail-stat">
+                  <span className="stat-label"><Gavel size={14}/> Current Bid</span>
+                  <span className="stat-value font-bold">${selectedItem.current_bid?.toFixed(2) || '0.00'}</span>
+                </div>
+                {selectedItem.valuation && (
+                  <>
+                    <div className="watch-detail-stat">
+                      <span className="stat-label"><ArrowUpDown size={14}/> Est. Value</span>
+                      <span className="stat-value text-emerald-600 font-bold">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
+                    </div>
+                    <div className="watch-detail-stat">
+                      <span className="stat-label"><TrendingUp size={14}/> Max Bid</span>
+                      <span className="stat-value text-blue-600 font-bold">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="watch-detail-actions">
+                <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="action-btn">
+                  View Full Auction <ExternalLink size={16} />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
