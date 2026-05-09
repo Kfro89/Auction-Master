@@ -118,6 +118,7 @@ class Valuation(Base):
     computed_at = Column(DateTime(timezone=True))
 
     item = relationship("Item", back_populates="valuation")
+    sample_cache = relationship("EbaySampleCache")
 
 
 class InventoryItem(Base):

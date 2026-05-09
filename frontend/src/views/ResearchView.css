@@ -325,6 +325,10 @@
   background: rgba(16, 185, 129, 0.25) !important;
 }
 
+.research-table tbody tr.high-profit:hover td {
+  background-color: transparent !important;
+}
+
 .roi-text-high {
   color: var(--success-color);
   font-weight: 800;

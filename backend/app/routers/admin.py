@@ -63,7 +63,18 @@ async def valuate_item(item_id: int, target_roi: float = 0.30, db: Session = Dep
         valuation = await run_item_valuation(db, item_id, target_roi)
         if not valuation:
             raise HTTPException(status_code=400, detail="Could not calculate valuation (insufficient data or item not found)")
-        return valuation
+        
+        val_dict = {
+            "est_market_value": valuation.est_market_value,
+            "max_bid_for_target_roi": valuation.max_bid_for_target_roi,
+            "target_roi_pct": valuation.target_roi_pct,
+            "computed_at": valuation.computed_at
+        }
+        if valuation.sample_cache:
+            val_dict["search_query"] = valuation.sample_cache.query_signature
+            val_dict["sample_size"] = valuation.sample_cache.sample_size
+            
+        return val_dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

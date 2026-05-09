@@ -7,7 +7,7 @@ class EbayBrowseClient:
         self.auth_client = auth_client
         self.base_url = "https://api.ebay.com/buy/browse/v1"
 
-    async def search_active_listings(self, query: str, condition_ids: List[str]) -> Dict[str, Any]:
+    async def search_active_listings(self, query: str, condition_ids: List[str], category_ids: str = None) -> Dict[str, Any]:
         token = await self.auth_client.get_token()
         
         headers = {
@@ -23,6 +23,9 @@ class EbayBrowseClient:
             "filter": filter_str,
             "limit": "100"
         }
+        
+        if category_ids:
+            params["category_ids"] = category_ids
 
         async with httpx.AsyncClient() as client:
             response = await client.get(

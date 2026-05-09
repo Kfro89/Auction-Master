@@ -54,6 +54,80 @@ async def extract_product_name(title: str) -> str:
         # Fallback to a simplified version of the title
         return title[:50]
 
+async def generate_valuation_data(title: str, description: str, raw_category: str) -> dict:
+    """
+    Uses a local LLM to classify an item, generate tags, and provide a list of eBay search queries
+    (from most specific to broader fallback options).
+    """
+    base_url = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
+    hierarchy_str = json.dumps(HIERARCHY, indent=2)
+    
+    system_prompt = f"""You are an expert at classifying auction items for resale and preparing eBay search terms.
+Your goal is to categorize an item based on the provided hierarchy, generate tags, and provide multiple eBay search queries.
+
+Hierarchy:
+{hierarchy_str}
+
+Instructions:
+1. Choose exactly one Category from the hierarchy keys.
+2. Choose exactly one Type from the selected Category's list.
+3. Generate 2-3 short, descriptive tags (e.g., 'Portable', 'Industrial', 'Vintage', 'New In Box').
+4. Determine the "item_class": "vehicle" (a complete drivable car/truck), "car_part" (a component for a vehicle), or "other".
+5. Provide a list of exactly 3 eBay search queries:
+   - If "item_class" is "car_part", the queries MUST include the vehicle Year, Make, Model, and the Part Name.
+   - Otherwise, follow standard progression: [0] Highly specific, [1] Slightly broader, [2] Broad fallback.
+6. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (list of strings), "item_class" (string), and "search_queries" (list of strings).
+7. Do not include markdown formatting, code blocks, or explanations.
+"""
+    user_prompt = f"Raw Category: {raw_category}\nTitle: {title}\nDescription: {description[:500] if description else 'N/A'}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                json={
+                    "model": "google/gemma-4-e4b",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.1
+                }
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"].strip()
+            
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            
+            content = content.strip()
+            result = json.loads(content)
+            
+            cat = result.get("category", "Other")
+            if cat not in HIERARCHY:
+                cat = "Other"
+            
+            return {
+                "category": cat,
+                "type": result.get("type", "General"),
+                "tags": [str(t) for t in result.get("tags", [])[:3]],
+                "search_queries": [str(q) for q in result.get("search_queries", []) if q],
+                "item_class": result.get("item_class", "other")
+            }
+            
+    except Exception as e:
+        logger.error(f"LLM valuation data generation failed for '{title}': {e}")
+        return {
+            "category": "Unknown",
+            "type": "General",
+            "tags": [],
+            "search_queries": [title[:50]],
+            "item_class": "other"
+        }
+
 async def classify_item(title: str, description: str, raw_category: str) -> dict:
     """
     Uses a local LLM to classify an item into the Category > Type hierarchy and generate tags.

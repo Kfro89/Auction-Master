@@ -3,7 +3,7 @@ import './ResearchView.css';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
-import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff } from 'lucide-react';
+import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -22,6 +22,8 @@ interface Item {
     max_bid_for_target_roi: number;
     target_roi_pct: number;
     computed_at: string;
+    search_query?: string;
+    sample_size?: number;
   };
   is_watched?: boolean;
 }
@@ -80,6 +82,8 @@ const ResearchView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState<{ [key: string]: boolean }>({ whitley: false, roller: false });
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
+  const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
+  const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
   const [targetRoi, setTargetRoi] = useState<number>(30);
 
   // Modal State
@@ -129,6 +133,16 @@ const ResearchView: React.FC = () => {
 
   const handleValuate = async (itemId: number) => {
     setValuatingItems(prev => new Set(prev).add(itemId));
+    
+    const statuses = ["Analyzing item...", "Using AI...", "Checking eBay...", "Calculating ROI..."];
+    let statusIdx = 0;
+    setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
+    
+    const interval = setInterval(() => {
+      statusIdx = (statusIdx + 1) % statuses.length;
+      setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
+    }, 2000);
+
     try {
       const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
       if (response.ok) {
@@ -136,15 +150,29 @@ const ResearchView: React.FC = () => {
         setItems(prev => prev.map(item => 
           item.id === itemId ? { ...item, valuation: newValuation } : item
         ));
+        setValuationErrors(prev => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
       } else {
+        const errData = await response.json().catch(() => ({ detail: "Valuation failed" }));
+        setValuationErrors(prev => ({ ...prev, [itemId]: errData.detail || "Valuation failed" }));
         console.error(`Failed to valuate item ${itemId}`);
       }
     } catch (error) {
+      setValuationErrors(prev => ({ ...prev, [itemId]: "Network error" }));
       console.error(`Error valuating item ${itemId}:`, error);
     } finally {
+      clearInterval(interval);
       setValuatingItems(prev => {
         const next = new Set(prev);
         next.delete(itemId);
+        return next;
+      });
+      setValuationStatus(prev => {
+        const next = { ...prev };
+        delete next[itemId];
         return next;
       });
     }
@@ -429,7 +457,21 @@ const ResearchView: React.FC = () => {
                       </div>
                     </td>
                     <td className="bold">${item.current_bid}</td>
-                    <td>{item.valuation ? `$${item.valuation.est_market_value.toFixed(2)}` : '--'}</td>
+                    <td>
+                      {item.valuation ? (
+                        <Tooltip text={
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', minWidth: '150px', padding: '4px' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Query</div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'normal', lineHeight: 1.3 }}>"{item.valuation.search_query || 'Unknown'}"</div>
+                            <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
+                            <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
+                          </div>
+                        }>
+                          <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0,0,0,0.3)' }}>${item.valuation.est_market_value.toFixed(2)}</span>
+                        </Tooltip>
+                      ) : '--'}
+                    </td>
                     <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
                     <td>
                       {item.computedRoi !== null ? (
@@ -442,6 +484,7 @@ const ResearchView: React.FC = () => {
                       <CountdownTimer endTime={item.end_time} />
                     </td>
                     <td>
+<<<<<<< Updated upstream
                       <button 
                         onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
                         className="icon-button"
@@ -460,6 +503,44 @@ const ResearchView: React.FC = () => {
                           {isValuating ? '...' : 'Valuate'}
                         </button>
                       </Tooltip>
+=======
+                      {isValuating ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                          <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                          <span style={{ display: 'inline-block', width: '115px' }}>{valuationStatus[item.id] || "Loading..."}</span>
+                        </div>
+                      ) : valuationErrors[item.id] ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 500, maxWidth: '150px', whiteSpace: 'normal', lineHeight: 1.2 }}>
+                            {valuationErrors[item.id]}
+                          </span>
+                          <button 
+                            className="small-btn"
+                            style={{ padding: '2px 8px', fontSize: '0.75rem', width: 'fit-content' }}
+                            onClick={() => {
+                              setValuationErrors(prev => {
+                                const next = { ...prev };
+                                delete next[item.id];
+                                return next;
+                              });
+                              handleValuate(item.id);
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : (
+                        <Tooltip text="Request LLM valuation">
+                          <button 
+                            className="small-btn"
+                            onClick={() => handleValuate(item.id)}
+                            disabled={isValuating}
+                          >
+                            Valuate
+                          </button>
+                        </Tooltip>
+                      )}
+>>>>>>> Stashed changes
                     </td>
                   </tr>
                 );

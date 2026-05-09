@@ -29,19 +29,23 @@ def serialize_item(item: Item) -> dict:
     }
     
     if item.valuation:
-        item_dict["valuation"] = {
+        val_dict = {
             "est_market_value": item.valuation.est_market_value,
             "max_bid_for_target_roi": item.valuation.max_bid_for_target_roi,
             "target_roi_pct": item.valuation.target_roi_pct,
             "computed_at": item.valuation.computed_at
         }
+        if item.valuation.sample_cache:
+            val_dict["search_query"] = item.valuation.sample_cache.query_signature
+            val_dict["sample_size"] = item.valuation.sample_cache.sample_size
+        item_dict["valuation"] = val_dict
         
     return item_dict
 
 @router.get("/")
 async def list_items(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     # Fetch items with their valuations
-    items = db.query(Item).options(joinedload(Item.valuation)).order_by(Item.end_time.asc()).limit(100).all()
+    items = db.query(Item).options(joinedload(Item.valuation).joinedload(Valuation.sample_cache)).order_by(Item.end_time.asc()).limit(100).all()
     return [serialize_item(item) for item in items]
 
 @router.post("/{item_id}/watch")
@@ -66,5 +70,5 @@ async def get_watchlist(
     db: Session = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    items = db.query(Item).options(joinedload(Item.valuation)).filter(Item.is_watched.is_(True)).order_by(Item.end_time.asc()).all()
+    items = db.query(Item).options(joinedload(Item.valuation).joinedload(Valuation.sample_cache)).filter(Item.is_watched.is_(True)).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..models import Item, AuctionHouse, EbaySampleCache, Valuation
 from .ebay_auth import EbayAuthClient
 from .ebay_browse import EbayBrowseClient
-from .llm import extract_product_name
+from .llm import extract_product_name, generate_valuation_data
 
 def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_premium: float = 0.0) -> Optional[Dict[str, Any]]:
     initial_sample_size = len(prices)
@@ -73,8 +73,17 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     auction_house = db.query(AuctionHouse).filter(AuctionHouse.id == item.auction_house_id).first()
     premium = auction_house.buyer_premium_pct if auction_house and auction_house.buyer_premium_pct else 0.0
 
-    # 1. Extract clean query
-    query = await extract_product_name(item.title)
+    # 1. Extract queries and metadata
+    val_meta = await generate_valuation_data(item.title, item.description, item.category or "")
+    queries = val_meta.get("search_queries", [item.title[:50]])
+    if not queries:
+        queries = [item.title[:50]]
+        
+    # Optionally update classification on the item
+    if val_meta.get("category") and val_meta.get("category") != "Unknown":
+        item.category = val_meta["category"]
+        item.tags = val_meta.get("tags", [])
+        db.commit()
     
     # 2. Setup eBay clients
     client_id = os.environ.get("EBAY_CLIENT_ID")
@@ -85,36 +94,53 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     auth_client = EbayAuthClient(client_id=client_id, client_secret=client_secret)
     browse_client = EbayBrowseClient(auth_client=auth_client)
     
-    # 3. Search eBay
+    # 3. Determine eBay Category ID for vehicles vs parts
+    item_class = val_meta.get("item_class", "other")
+    category_id = None
+    if item_class == "vehicle":
+        category_id = "6001" # eBay Motors Cars & Trucks
+    elif item_class == "car_part":
+        category_id = "6030" # eBay Motors Parts & Accessories
+        
     condition_ids = [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
-    results = await browse_client.search_active_listings(query=query, condition_ids=condition_ids)
     
-    item_summaries = results.get("itemSummaries", [])
-    if not item_summaries:
-        return None
+    val_data = None
+    used_query = None
+    
+    for query in queries:
+        results = await browse_client.search_active_listings(query=query, condition_ids=condition_ids, category_ids=category_id)
+        item_summaries = results.get("itemSummaries", [])
+        
+        if not item_summaries:
+            continue
+            
+        prices = []
+        for summary in item_summaries:
+            price_obj = summary.get("price", {})
+            val = price_obj.get("value")
+            if val:
+                try:
+                    prices.append(float(val))
+                except ValueError:
+                    pass
+                    
+        if not prices:
+            continue
+            
+        # 4. Calculate
+        temp_val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium)
+        if temp_val_data:
+            val_data = temp_val_data
+            used_query = query
+            break  # Stop as soon as we have a valid valuation from a query
 
-    prices = []
-    for summary in item_summaries:
-        price_obj = summary.get("price", {})
-        val = price_obj.get("value")
-        if val:
-            try:
-                prices.append(float(val))
-            except ValueError:
-                pass
-                
-    if not prices:
-        return None
-
-    # 4. Calculate
-    val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium)
     if not val_data:
         return None
 
     # 5. Persist
     sample_cache = EbaySampleCache(
         item_id=item.id,
-        query_signature=query,
+        query_signature=used_query,
         sample_size=val_data["initial_sample_size"],
         trimmed_median=val_data["trimmed_median"],
         fetched_at=datetime.datetime.utcnow()

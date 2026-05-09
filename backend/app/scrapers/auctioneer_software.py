@@ -86,7 +86,7 @@ class AuctioneerSoftwareScraper(BaseScraper):
         """
         Fetch all lots for a specific auction by iterating through pagination.
         """
-        first_page_url = f"{self.base_url}/auctions/{auction_id}"
+        first_page_url = f"{self.base_url}/auctions/{auction_id}?pageSize=10000"
         response = await self.client.get(first_page_url)
         response.raise_for_status()
         
@@ -115,7 +115,7 @@ class AuctioneerSoftwareScraper(BaseScraper):
             if current_page > 100: 
                 break
                 
-            page_url = f"{self.base_url}/auctions/{auction_id}?page={current_page}"
+            page_url = f"{self.base_url}/auctions/{auction_id}?pageSize=10000&page={current_page}"
             try:
                 await asyncio.sleep(1.0) # Rate limiting courtesy
                 response = await self.client.get(page_url)

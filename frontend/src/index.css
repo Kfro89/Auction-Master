@@ -41,7 +41,6 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background-color: #FAFAFA;
-  overflow: hidden;
 }
 
 /* Global utility classes for the new aesthetic */
