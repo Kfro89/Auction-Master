@@ -167,7 +167,7 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
     };
 
     items.forEach(item => {
-      const end = new Date(item.end_time).getTime();
+      const end = new Date(item.end_time || '').getTime();
       if (end <= todayEnd) result.today++;
       if (end > todayEnd && end <= tomorrowEnd.getTime()) result.tomorrow++;
       if (end <= weekEnd.getTime()) result.week++;
@@ -187,7 +187,7 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
     weekEnd.setHours(23, 59, 59, 999);
 
     return items.filter(item => {
-      const end = new Date(item.end_time).getTime();
+      const end = new Date(item.end_time || '').getTime();
       
       let passesDateFilter = true;
       if (filter === 'today') passesDateFilter = end <= todayEnd;

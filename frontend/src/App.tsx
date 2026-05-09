@@ -11,8 +11,6 @@ import LoginView from './views/LoginView';
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
   const [activeTab, setActiveTab] = useState('research');
-  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
-  const [sidebarContent, setSidebarContent] = useState<React.ReactNode>(null);
 
   if (!token) {
     return <LoginView onLogin={setToken} />;
@@ -21,7 +19,7 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'research':
-        return <ResearchView setSidebarContent={setSidebarContent} />;
+        return <ResearchView setSidebarContent={() => {}} />;
       case 'bidding':
         return <BiddingView />;
       case 'work-queue':
@@ -38,15 +36,10 @@ function App() {
   return (
     <div className="app-shell">
       <Navigation 
-        isCollapsed={isNavCollapsed} 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
-        onToggle={() => setIsNavCollapsed(!isNavCollapsed)}
-        sidebarContent={sidebarContent}
       />
-      <main className="main-content" style={{ 
-        marginLeft: isNavCollapsed ? 'var(--nav-width-collapsed)' : 'var(--nav-width-expanded)' 
-      }}>
+      <main className="main-content">
         {renderContent()}
       </main>
     </div>

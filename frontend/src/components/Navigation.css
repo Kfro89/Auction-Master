@@ -1,99 +1,43 @@
-.glass-nav {
+.floating-pill-nav {
   position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: var(--nav-width-expanded);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border-right: var(--glass-border);
-  box-shadow: var(--shadow-soft);
-  transition: width var(--nav-transition);
-  z-index: 1000;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: white;
+  border-radius: 9999px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  padding: 12px 8px;
+  z-index: 50;
+  border: 1px solid #F3F4F6;
+}
+
+.floating-pill-nav .nav-items {
   display: flex;
   flex-direction: column;
-}
-
-.glass-nav.collapsed {
-  width: var(--nav-width-collapsed);
-}
-
-.nav-header {
-  height: 64px;
-  display: flex;
+  gap: 16px;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 1rem;
-  border-bottom: var(--glass-border);
 }
 
-.logo-text {
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: var(--primary-color);
-  font-size: 1.1rem;
-}
-
-.nav-items {
-  padding: 1rem 0;
-  flex: 1;
-}
-
-.nav-item {
-  width: 100%;
+.floating-pill-nav .nav-item {
+  background: transparent;
   border: none;
-  background: none;
+  color: #9CA3AF;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  padding: 0.85rem 1.25rem;
-  color: var(--text-dim);
+  justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  gap: 1rem;
-  font-weight: 500;
 }
 
-.nav-item:hover {
-  background: rgba(0, 0, 0, 0.02);
-  color: var(--text-main);
+.floating-pill-nav .nav-item:hover {
+  color: #111827;
+  background-color: #F9FAFB;
 }
 
-.nav-item.active {
-  background: rgba(37, 99, 235, 0.05);
-  color: var(--primary-color);
-  border-right: 3px solid var(--primary-color);
+.floating-pill-nav .nav-item.active {
+  color: #059669; /* Emerald */
+  background-color: #ECFDF5;
 }
-
-.nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-}
-
-.toggle-btn {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.toggle-btn:hover {
-  background: rgba(0,0,0,0.05);
-  color: var(--text-main);
-}
-
-.sidebar-bottom-content {
-  margin-top: auto;
-  border-top: var(--glass-border);
-  padding: 1rem 0;
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
