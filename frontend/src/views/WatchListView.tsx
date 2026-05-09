@@ -109,7 +109,7 @@ const WatchListView: React.FC = () => {
               
               <div className="watch-card-image-container">
                  {item.image_url ? (
-                    <img src={item.image_url} alt={item.title} className="watch-card-image" />
+                    <img src={item.image_url.replace('/small/', '/large/').replace('/thumb/', '/large/')} alt={item.title} className="watch-card-image" />
                  ) : (
                     <div className="watch-card-no-image">No Image</div>
                  )}

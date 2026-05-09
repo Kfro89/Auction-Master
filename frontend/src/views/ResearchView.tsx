@@ -526,7 +526,7 @@ const ResearchView: React.FC = () => {
                     <td className="watch-cell">
                       <button 
                         onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
-                        className="icon-button"
+                        className={`glass-eye-btn ${item.is_watched ? 'watched' : ''}`}
                         title={item.is_watched ? "Remove from Watch List" : "Add to Watch List"}
                       >
                         {item.is_watched ? <Eye size={18} className="text-emerald-500" /> : <EyeOff size={18} className="text-slate-400" />}
