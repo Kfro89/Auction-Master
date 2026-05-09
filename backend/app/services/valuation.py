@@ -49,8 +49,16 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
     # eBay Fees approx = 13.25% + $0.40
     ebay_fees = est_market_value * 0.1325 + 0.40
     
-    # Max Bid = (est_market_value / (1 + Target ROI)) - eBay Fees - Auction Premium
-    max_bid_for_target_roi = (est_market_value / (1 + target_roi)) - ebay_fees - auction_premium
+    # Total Cost = Max Bid * (1 + Auction Premium %)
+    # Revenue = Est Market Value - eBay Fees
+    # Target ROI = (Revenue - Total Cost) / Total Cost
+    # Max Bid = Revenue / ((1 + Target ROI) * (1 + Auction Premium %))
+    premium_decimal = auction_premium / 100.0
+    revenue = est_market_value - ebay_fees
+    max_bid_for_target_roi = revenue / ((1 + target_roi) * (1 + premium_decimal))
+    
+    # Ensure we don't return negative bids for items worth less than eBay fees
+    max_bid_for_target_roi = max(0.0, max_bid_for_target_roi)
     
     return {
         "initial_sample_size": initial_sample_size,

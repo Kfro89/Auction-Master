@@ -34,10 +34,14 @@ def test_calculate_valuation_success():
     expected_est_market_value = result["trimmed_median"] * 0.75
     assert math.isclose(result["est_market_value"], expected_est_market_value, rel_tol=1e-5)
     
-    # Max Bid = (est_market_value / (1 + Target ROI)) - eBay Fees - Auction Premium
-    # eBay Fees = est_market_value * 0.1325 + 0.40
+    # Total Cost = Max Bid * (1 + Auction Premium %)
+    # Revenue = Est Market Value - eBay Fees
+    # Target ROI = (Revenue - Total Cost) / Total Cost
+    # Max Bid = Revenue / ((1 + Target ROI) * (1 + Auction Premium %))
     expected_ebay_fees = expected_est_market_value * 0.1325 + 0.40
-    expected_max_bid = (expected_est_market_value / (1 + 0.30)) - expected_ebay_fees - 0.0
+    premium_decimal = 0.0 / 100.0
+    expected_revenue = expected_est_market_value - expected_ebay_fees
+    expected_max_bid = expected_revenue / ((1 + 0.30) * (1 + premium_decimal))
     
     assert math.isclose(result["max_bid_for_target_roi"], expected_max_bid, rel_tol=1e-5)
     assert result["ebay_fees"] == expected_ebay_fees
