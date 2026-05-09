@@ -82,3 +82,8 @@ Following the completion of the core phases, several critical stability and accu
 - Relies heavily on a central Command Palette for navigation and actions.
 - Introduced edge-to-edge content areas, maximizing whitespace and clarity.
 - Utilizes the Inter font and a single Emerald accent color.
+
+### 10. Watch List Integration (Phase 10)
+- Implemented a Watch List feature to track items across auctions.
+- Added `is_watched` backend tracking and dedicated `WatchListView` in frontend.
+- Added APScheduler automated cleanup to prune items older than 14 days.
