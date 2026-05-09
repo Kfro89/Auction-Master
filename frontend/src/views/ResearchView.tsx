@@ -247,57 +247,7 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
     return Array.from(categories).sort();
   }, [items]);
 
-  useEffect(() => {
-    if (setSidebarContent) {
-      setSidebarContent(
-        <div className="sidebar-filters">
-          <div className="sidebar-filter-group">
-            <h3><Search size={14} /> Search</h3>
-            <input 
-              type="text" 
-              className="frosted-input"
-              placeholder="Search title or lot..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="sidebar-filter-group">
-            <h3><Filter size={14} /> Category</h3>
-            <select 
-              className="frosted-input"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              style={{ width: '100%' }}
-            >
-              <option value="">All Categories</option>
-              {uniqueCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sidebar-filter-group">
-            <h3><Tag size={14} /> Tag</h3>
-            <select 
-              className="frosted-input"
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              style={{ width: '100%' }}
-            >
-              <option value="">All Tags</option>
-              {uniqueTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      );
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (setSidebarContent) setSidebarContent(null);
-    };
-  }, [setSidebarContent, searchQuery, tagFilter, categoryFilter, uniqueTags, uniqueCategories]);
+
 
   const { items: sortedItems, requestSort, sortConfig } = useSortableData(itemsWithComputedRoi);
 
@@ -342,7 +292,7 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
           </Tooltip>
           <Tooltip text="Refresh data from Roller">
             <button 
-              className={`action-btn glass ${scraping.roller ? 'loading' : ''}`}
+              className={`action-btn ${scraping.roller ? 'loading' : ''}`}
               onClick={() => handleScrape('roller')}
               disabled={scraping.roller}
             >
@@ -378,8 +328,39 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
       </section>
 
       <section className="grid-section">
-        <div className="glass-panel">
-          <table className="dense-grid">
+        <div className="saas-view-header">
+          <h1 className="saas-title">Research</h1>
+          <div className="saas-filters">
+            <input 
+              type="text" 
+              className="saas-input"
+              placeholder="Search title or lot..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <select 
+              className="saas-input"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="">All Categories</option>
+              {uniqueCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <select 
+              className="saas-input"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+            >
+              <option value="">All Tags</option>
+              {uniqueTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <table className="research-table">
             <thead>
               <tr>
                 <th><ImageIcon size={14} /></th>
@@ -451,7 +432,6 @@ const ResearchView: React.FC<{ setSidebarContent?: (content: React.ReactNode) =>
               })}
             </tbody>
           </table>
-        </div>
       </section>
 
       <Modal isOpen={!!selectedImage} onClose={() => setSelectedImage(null)} size="lg">

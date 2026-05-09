@@ -42,50 +42,39 @@
   color: var(--text-main);
 }
 
-.frosted-input {
-  width: 60px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid var(--text-dim);
-  color: var(--text-main);
-  padding: 4px 8px;
+/* SaaS Styles */
+.saas-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.saas-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.saas-filters {
+  display: flex;
+  gap: 12px;
+}
+
+.saas-input {
+  padding: 8px 12px;
   border-radius: 6px;
-  font-weight: bold;
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.frosted-input:focus {
+  border: 1px solid #E5E7EB;
+  background-color: white;
+  color: #374151;
+  font-size: 0.9rem;
   outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
-/* Glass Master Aesthetic */
-.glass {
-  background: var(--surface-color);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--glass-border);
-  box-shadow: var(--shadow-soft);
-  transition: all 0.2s ease;
-}
-
-.glass-card {
-  background: var(--surface-color);
-  backdrop-filter: var(--glass-blur);
-  border: var(--glass-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-soft);
-  transition: all 0.2s ease;
-}
-
-.glass-panel {
-  background: var(--surface-color);
-  backdrop-filter: var(--glass-blur);
-  border: var(--glass-border);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
+.saas-input:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 1px rgba(5, 150, 105, 0.1);
 }
 
 /* Buttons */
@@ -146,6 +135,18 @@
   cursor: not-allowed;
 }
 
+.refresh-btn {
+  background-color: white;
+  border: 1px solid #E5E7EB;
+  color: #374151;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.refresh-btn:hover {
+  background-color: #F3F4F6;
+}
+
 /* KPI Bar */
 .kpi-bar {
   display: flex;
@@ -159,6 +160,10 @@
   align-items: center;
   gap: 1rem;
   cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: all 0.2s ease;
 }
 
 .kpi-card:hover {
@@ -168,7 +173,7 @@
 
 .kpi-card.active-filter {
   border: 2px solid var(--primary-color);
-  background: rgba(255, 255, 255, 0.85);
+  background: #f9fafb;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
 }
 
@@ -207,32 +212,48 @@
   font-weight: 500;
 }
 
-/* Grid Section */
-.dense-grid {
+/* Grid Section - SaaS overrides */
+.research-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  background-color: transparent;
 }
 
-.dense-grid th {
-  text-align: left;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.02);
-  color: var(--text-dim);
-  font-weight: 600;
+.research-table th {
+  background-color: transparent !important;
+  color: #6B7280;
+  font-weight: 500;
+  font-size: 0.85rem;
   text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  letter-spacing: 0.05em;
+  padding: 16px 24px;
+  border-bottom: 1px solid #E5E7EB;
+  border-right: none;
+  border-left: none;
+  border-top: none;
 }
 
-.dense-grid th.sortable {
+.research-table td {
+  padding: 20px 24px;
+  border-bottom: 1px solid #F3F4F6;
+  border-right: none;
+  border-left: none;
+  color: #374151;
+  background-color: transparent !important;
+  vertical-align: middle;
+}
+
+.research-table tbody tr:hover td {
+  background-color: #F9FAFB !important;
+}
+
+.research-table th.sortable {
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
 }
 
-.dense-grid th.sortable:hover {
+.research-table th.sortable:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--text-main);
 }
@@ -244,12 +265,6 @@
 
 .sort-icon.neutral {
   opacity: 0.3;
-}
-
-.dense-grid td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-  color: var(--text-main);
 }
 
 .grid-thumb {
@@ -313,6 +328,15 @@
 .roi-text-high {
   color: var(--success-color);
   font-weight: 800;
+}
+
+.roi-badge {
+  background-color: #ECFDF5;
+  color: #059669;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
 }
 
 /* Timer */
@@ -409,55 +433,3 @@
 .tag-badge:hover {
   background: rgba(var(--primary-color-rgb), 0.3);
 }
-
-/* Sidebar Filters */
-.sidebar-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1rem;
-}
-
-.sidebar-filter-group h3 {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.sidebar-filter-group input {
-  width: 100%;
-}
-
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.tag-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  padding: 0.35rem 0.75rem;
-  border-radius: 16px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tag-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-}
-
-.tag-btn.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
-}
-
