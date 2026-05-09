@@ -3,7 +3,7 @@ import './ResearchView.css';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
 import Tooltip from '../components/Tooltip';
-import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon } from 'lucide-react';
+import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -23,6 +23,7 @@ interface Item {
     target_roi_pct: number;
     computed_at: string;
   };
+  is_watched?: boolean;
 }
 
 const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
@@ -146,6 +147,25 @@ const ResearchView: React.FC = () => {
         next.delete(itemId);
         return next;
       });
+    }
+  };
+
+  const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`/api/items/${itemId}/watch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_watched: !currentStatus })
+      });
+      
+      if (response.ok) {
+        // Optimistically update the UI
+        setItems(prev => prev.map(item => 
+          item.id === itemId ? { ...item, is_watched: !currentStatus } : item
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to toggle watch status:', error);
     }
   };
 
@@ -373,6 +393,7 @@ const ResearchView: React.FC = () => {
                 <th onClick={() => requestSort('valuation.max_bid_for_target_roi')} className="sortable">Max Bid {renderSortIcon('valuation.max_bid_for_target_roi')}</th>
                 <th onClick={() => requestSort('computedRoi')} className="sortable">ROI % {renderSortIcon('computedRoi')}</th>
                 <th onClick={() => requestSort('end_time')} className="sortable">Time Remaining {renderSortIcon('end_time')}</th>
+                <th>Watch</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -419,6 +440,15 @@ const ResearchView: React.FC = () => {
                     </td>
                     <td className="timer-cell">
                       <CountdownTimer endTime={item.end_time} />
+                    </td>
+                    <td>
+                      <button 
+                        onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
+                        className="icon-button"
+                        title={item.is_watched ? "Remove from Watch List" : "Add to Watch List"}
+                      >
+                        {item.is_watched ? <Eye size={18} className="text-emerald-500" /> : <EyeOff size={18} className="text-slate-400" />}
+                      </button>
                     </td>
                     <td>
                       <Tooltip text="Request LLM valuation">
