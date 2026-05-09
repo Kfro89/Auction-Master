@@ -484,7 +484,6 @@ const ResearchView: React.FC = () => {
                       <CountdownTimer endTime={item.end_time} />
                     </td>
                     <td>
-<<<<<<< Updated upstream
                       <button 
                         onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
                         className="icon-button"
@@ -494,16 +493,6 @@ const ResearchView: React.FC = () => {
                       </button>
                     </td>
                     <td>
-                      <Tooltip text="Request LLM valuation">
-                        <button 
-                          className={`small-btn ${isValuating ? 'loading' : ''}`}
-                          onClick={() => handleValuate(item.id)}
-                          disabled={isValuating}
-                        >
-                          {isValuating ? '...' : 'Valuate'}
-                        </button>
-                      </Tooltip>
-=======
                       {isValuating ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                           <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
@@ -540,7 +529,6 @@ const ResearchView: React.FC = () => {
                           </button>
                         </Tooltip>
                       )}
->>>>>>> Stashed changes
                     </td>
                   </tr>
                 );
