@@ -220,17 +220,22 @@
 }
 
 .research-table th {
-  background-color: transparent !important;
-  color: #6B7280;
-  font-weight: 500;
+  background-color: rgba(37, 99, 235, 0.1) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--primary-color);
+  font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 16px 24px;
-  border-bottom: 1px solid #E5E7EB;
+  border-bottom: 1px solid rgba(37, 99, 235, 0.2);
   border-right: none;
   border-left: none;
   border-top: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .research-table td {
@@ -239,12 +244,19 @@
   border-right: none;
   border-left: none;
   color: #374151;
-  background-color: transparent !important;
   vertical-align: middle;
 }
 
+.research-table tbody tr:nth-child(even) td {
+  background-color: #F8FAFC !important;
+}
+
+.research-table tbody tr:nth-child(odd) td {
+  background-color: #FFFFFF !important;
+}
+
 .research-table tbody tr:hover td {
-  background-color: #F9FAFB !important;
+  background-color: #F1F5F9 !important;
 }
 
 .research-table th.sortable {
