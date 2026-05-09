@@ -321,26 +321,26 @@
 }
 
 /* ROI Highlighting */
-.high-profit {
-  background: rgba(16, 185, 129, 0.25) !important;
-}
-
-.research-table tbody tr.high-profit:hover td {
-  background-color: transparent !important;
-}
-
-.roi-text-high {
-  color: var(--success-color);
-  font-weight: 800;
-}
-
 .roi-badge {
-  background-color: #ECFDF5;
-  color: #059669;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.9rem;
+}
+
+.roi-badge.roi-good {
+  background-color: #ECFDF5;
+  color: #059669;
+}
+
+.roi-badge.roi-warning {
+  background-color: #FEF3C7;
+  color: #D97706;
+}
+
+.roi-badge.roi-neutral {
+  background-color: #F3F4F6;
+  color: #374151;
 }
 
 /* Timer */

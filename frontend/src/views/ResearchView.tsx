@@ -468,10 +468,16 @@ const ResearchView: React.FC = () => {
             <tbody>
               {sortedItems.map(item => {
                 const isValuating = valuatingItems.has(item.id);
-                const isHighRoi = item.computedRoi !== null && item.computedRoi > 25;
                 
+                const getRoiClass = (roi: number | null) => {
+                  if (roi === null) return '';
+                  if (roi >= targetRoi) return 'roi-good';
+                  if (roi >= targetRoi - 10) return 'roi-warning';
+                  return 'roi-neutral';
+                };
+
                 return (
-                  <tr key={item.id} className={isHighRoi ? 'high-profit' : ''}>
+                  <tr key={item.id}>
                     <td>
                       <img 
                         src={item.image_url || '/placeholder.png'} 
@@ -515,7 +521,7 @@ const ResearchView: React.FC = () => {
                     <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
                     <td>
                       {item.computedRoi !== null ? (
-                        <span className="roi-badge">
+                        <span className={`roi-badge ${getRoiClass(item.computedRoi)}`}>
                           {item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`}
                         </span>
                       ) : '--'}
