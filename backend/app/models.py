@@ -64,6 +64,20 @@ class Item(Base):
     normalized_condition_id = Column(String) # eBay condition ID
     brand = Column(String)
     mpn = Column(String)
+
+    # Universal category (PS taxonomy)
+    category = Column(String)
+
+    # Detail page fields (populated by detail scrape)
+    agency_name = Column(String)
+    location_state = Column(String)
+    pickup_address = Column(String)
+    pickup_city = Column(String)
+    pickup_zip = Column(String)
+    pickup_name = Column(String)
+    is_dutch_auction = Column(Boolean, default=False)
+    may_extend = Column(Boolean, default=False)
+    detail_scraped_at = Column(DateTime)
     
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")
@@ -76,3 +90,42 @@ class ConditionMap(Base):
     auction_house_id = Column(Integer, ForeignKey("auction_houses.id"), nullable=False)
     raw_pattern = Column(String, nullable=False) # e.g., "Used - Good"
     ebay_condition_id = Column(String, nullable=False) # e.g., "3000"
+
+
+class Category(Base):
+    """Universal category taxonomy based on Public Surplus categories."""
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ps_cat_id = Column(Integer, unique=True, nullable=False)  # PS catId value
+    name = Column(String, unique=True, nullable=False)         # e.g., "Electronics"
+
+
+class UserSettings(Base):
+    """Single-row app-wide configuration (single-user app)."""
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+
+    # Public Surplus geographic filter
+    ps_zip_code = Column(String, default="")
+    ps_radius_miles = Column(Integer, default=200)
+    ps_region = Column(String, default="")
+
+    # Scrape controls
+    ps_enabled = Column(Boolean, default=True)
+    ps_end_hours = Column(Integer, default=240)       # Items ending within 10 days
+    ps_category_id = Column(Integer, default=-1)      # -1 = All Categories
+
+
+class WatchlistItem(Base):
+    """Items saved to the user's watchlist for tracking."""
+    __tablename__ = "watchlist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, unique=True)
+    added_at = Column(DateTime, nullable=False)
+    notes = Column(String, default="")
+
+    item = relationship("Item")
+
