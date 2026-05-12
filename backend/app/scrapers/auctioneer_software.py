@@ -157,5 +157,26 @@ class AuctioneerSoftwareScraper(BaseScraper):
         except Exception:
             return False
 
+    async def login(self, username: str, password: str = None, session_cookie: str = None) -> bool:
+        """
+        Auctioneer Software (Whitley/Roller) login.
+        If session_cookie is provided, use it directly (Pseudo-Auth bypass).
+        """
+        if session_cookie:
+            self.client.cookies.set("connect.sid", session_cookie) # Typical session cookie, might vary
+            return True
+            
+        raise NotImplementedError("Standard HTTP login not implemented yet. Use session cookie bypass.")
+
+    async def place_bid(self, auction_id: str, lot_number: str, amount: float) -> Dict[str, Any]:
+        """
+        Submit a bid to the platform.
+        """
+        # We check if we have cookies set on the client
+        if not self.client.cookies:
+            raise PermissionError("Not authenticated. Call login() first.")
+            
+        raise NotImplementedError("Direct bidding structure not fully mapped for Auctioneer Software yet.")
+
     async def close(self):
         await self.client.aclose()

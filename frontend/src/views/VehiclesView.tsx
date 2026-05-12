@@ -124,12 +124,11 @@ const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
-const ResearchView: React.FC = () => {
+const VehiclesView: React.FC = () => {
   const { setContextCommands } = useCommandContext();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [isScraping, setIsScraping] = useState<boolean>(false);
-  const [scrapeProgress, setScrapeProgress] = useState<{ step: number, totalSteps: number, message: string, newItems: number }>({ step: 0, totalSteps: 0, message: '', newItems: 0 });
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
   const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
@@ -288,60 +287,6 @@ const ResearchView: React.FC = () => {
 
   // Modal State
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  
-  // Bidding State
-  const [bidAmount, setBidAmount] = useState<string>('');
-  const [isBidding, setIsBidding] = useState(false);
-  const [bidError, setBidError] = useState<string | null>(null);
-  const [bidSuccess, setBidSuccess] = useState<string | null>(null);
-  const [authRequiredSite, setAuthRequiredSite] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selectedItem) {
-       setBidAmount('');
-       setBidError(null);
-       setBidSuccess(null);
-       setAuthRequiredSite(null);
-    }
-  }, [selectedItem]);
-
-  const handlePlaceBid = async () => {
-    if (!selectedItem || !bidAmount || isNaN(Number(bidAmount))) return;
-    setIsBidding(true);
-    setBidError(null);
-    setBidSuccess(null);
-    
-    try {
-      const response = await fetch(`/api/items/${selectedItem.id}/bid`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Number(bidAmount) })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        if (response.status === 403 && data.detail?.error === 'captcha_or_2fa_required') {
-          setAuthRequiredSite(data.detail.website_key);
-          setBidError("Authentication requires a manual login. Please go to the settings to paste a session cookie, or log in directly on the auction site.");
-        } else if (response.status === 401) {
-           setBidError("No credentials set. Please go to Settings to add your credentials.");
-        } else {
-          setBidError(data.detail?.message || data.detail || 'Failed to place bid');
-        }
-      } else {
-        setBidSuccess("Bid placed successfully!");
-        // Update item in local state
-        setItems(prev => prev.map(item => 
-          item.id === selectedItem.id ? { ...item, current_bid: data.result?.new_bid || Number(bidAmount), is_user_bidding: true } : item
-        ));
-      }
-    } catch (err) {
-      setBidError('Network error occurred while bidding.');
-    } finally {
-      setIsBidding(false);
-    }
-  };
 
   // Filter State
   const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
@@ -377,14 +322,6 @@ const ResearchView: React.FC = () => {
           const data = await response.json();
           
           const currentlyScraping = data.scrape?.status === 'active';
-          if (currentlyScraping) {
-            setScrapeProgress({
-              step: data.scrape.step || 0,
-              totalSteps: data.scrape.total_steps || 4,
-              message: data.scrape.message || 'Scanning...',
-              newItems: data.scrape.new_items || 0
-            });
-          }
           if (!currentlyScraping && isScrapingRef.current) {
             // Scrape just finished, let's fetch items and find new ones
             try {
@@ -614,10 +551,10 @@ const ResearchView: React.FC = () => {
         }
       }
       
-      // EXCLUDE Motor Pool vehicles from the main Research tab
-      let passesMotorPoolCheck = true;
+      // INCLUDE ONLY Motor Pool vehicles
+      let passesMotorPoolCheck = false;
       if (item.category && item.category.startsWith('Motor Pool') && !item.category.startsWith('Motor Pool Parts')) {
-        passesMotorPoolCheck = false;
+        passesMotorPoolCheck = true;
       }
       
       let passesAuctionHouse = true;
@@ -740,33 +677,16 @@ const ResearchView: React.FC = () => {
           <p>Real-time arbitrage opportunities from top auction houses.</p>
         </div>
         <div className="header-actions">
-          {isScraping ? (
-            <div className="scrape-progress-container">
-              <div className="scrape-progress-bar-track">
-                <div 
-                  className="scrape-progress-bar-fill"
-                  style={{ width: `${scrapeProgress.totalSteps > 0 ? (scrapeProgress.step / scrapeProgress.totalSteps) * 100 : 0}%` }}
-                />
-                <span className="scrape-progress-bar-label">
-                  {scrapeProgress.totalSteps > 0 ? `${Math.round((scrapeProgress.step / scrapeProgress.totalSteps) * 100)}%` : '0%'}
-                </span>
-              </div>
-              <div className="scrape-progress-status">
-                {scrapeProgress.message || 'Initializing scan...'}
-              </div>
-            </div>
-          ) : (
-            <Tooltip text="Refresh data from all auction houses">
-              <button 
-                className="action-btn scrape-btn"
-                onClick={handleScrape}
-                disabled={isScraping}
-              >
-                <TrendingUp size={16}/>
-                Check for New Items
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip text="Refresh data from all auction houses">
+            <button 
+              className={`action-btn scrape-btn ${isScraping ? 'scraping' : ''}`}
+              onClick={handleScrape}
+              disabled={isScraping}
+            >
+              {isScraping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
+              {isScraping ? 'Scanning...' : 'Check for New Items'}
+            </button>
+          </Tooltip>
           <Tooltip text="Update valuations for all items">
             <button 
               className="action-btn"
@@ -886,8 +806,11 @@ const ResearchView: React.FC = () => {
                 {renderHeaderCell('title', 'Title', 'title')}
                 {renderHeaderCell('lot', 'Lot', 'lot_number')}
                 {renderHeaderCell('source', 'Source', 'auction_house_key')}
-                {renderHeaderCell('category', 'Category')}
-                {renderHeaderCell('tags', 'Tags')}
+                {renderHeaderCell('vin', 'VIN', 'vin')}
+                {renderHeaderCell('vehicle_year', 'Year', 'vehicle_year')}
+                {renderHeaderCell('vehicle_make', 'Make', 'vehicle_make')}
+                {renderHeaderCell('vehicle_model', 'Model', 'vehicle_model')}
+                {renderHeaderCell('vehicle_trim', 'Trim', 'vehicle_trim')}
                 {renderHeaderCell('bid', 'Bid', 'current_bid')}
                 {renderHeaderCell('estMarket', 'Est. Market', 'valuation.est_market_value')}
                 {renderHeaderCell('maxBid', 'Max Bid', 'valuation.max_bid_for_target_roi')}
@@ -940,23 +863,11 @@ const ResearchView: React.FC = () => {
                         {AUCTION_HOUSE_MAP[item.auction_house_key]?.short || 'Unknown'}
                       </span>
                     </td>
-                    <td style={getColStyle('category')}>
-                      {item.category && <span className="category-badge">{item.category}</span>}
-                    </td>
-                    <td style={getColStyle('tags')}>
-                      <div className="tags-container">
-                        {normalizeTags(item.tags).slice(0, 3).map((tag, idx) => (
-                          <span key={`${item.id}-tag-${idx}`} className={`tag-badge ${tag.key ? 'structured-tag' : ''}`}>
-                            <span className="tag-value">{tag.value}</span>
-                          </span>
-                        ))}
-                        {normalizeTags(item.tags).length > 3 && (
-                          <span className="tag-badge" style={{ opacity: 0.6, cursor: 'default' }}>
-                            +{normalizeTags(item.tags).length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                    <td style={getColStyle('vin')} className="mono text-xs">{item.vin || '--'}</td>
+                    <td style={getColStyle('vehicle_year')}>{item.vehicle_year || '--'}</td>
+                    <td style={getColStyle('vehicle_make')}>{item.vehicle_make || '--'}</td>
+                    <td style={getColStyle('vehicle_model')}>{item.vehicle_model || '--'}</td>
+                    <td style={getColStyle('vehicle_trim')}>{item.vehicle_trim || '--'}</td>
                     <td className="bold" style={getColStyle('bid')}>${item.current_bid.toFixed(2)}</td>
                     <td style={getColStyle('estMarket')}>
                       {item.valuation ? (
@@ -967,6 +878,12 @@ const ResearchView: React.FC = () => {
                             <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
                             <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
+                            <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mean Price</div>
+                            <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.mean?.toFixed(2) || '--'}</div>
+                            <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trimmed Median</div>
+                            <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.trimmed_median?.toFixed(2) || '--'}</div>
                           </div>
                         }>
                           <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0,0,0,0.3)' }}>${item.valuation.est_market_value.toFixed(2)}</span>
@@ -1089,6 +1006,12 @@ const ResearchView: React.FC = () => {
                                 <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
                                 <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
+                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mean Price</div>
+                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.mean?.toFixed(2) || '--'}</div>
+                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trimmed Median</div>
+                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.trimmed_median?.toFixed(2) || '--'}</div>
                               </div>
                             }>
                               <span className="stat-value text-emerald-600 font-bold" style={{ cursor: 'help', borderBottom: '1px dashed rgba(16, 185, 129, 0.4)' }}>
@@ -1230,6 +1153,36 @@ const ResearchView: React.FC = () => {
                     <span className="stat-value">{selectedItem.category}</span>
                   </div>
                 )}
+                {selectedItem.vin && (
+                  <div className="item-detail-stat">
+                    <span className="stat-label">VIN</span>
+                    <span className="stat-value mono">{selectedItem.vin}</span>
+                  </div>
+                )}
+                {selectedItem.vehicle_year && (
+                  <div className="item-detail-stat">
+                    <span className="stat-label">Year</span>
+                    <span className="stat-value">{selectedItem.vehicle_year}</span>
+                  </div>
+                )}
+                {selectedItem.vehicle_make && (
+                  <div className="item-detail-stat">
+                    <span className="stat-label">Make</span>
+                    <span className="stat-value">{selectedItem.vehicle_make}</span>
+                  </div>
+                )}
+                {selectedItem.vehicle_model && (
+                  <div className="item-detail-stat">
+                    <span className="stat-label">Model</span>
+                    <span className="stat-value">{selectedItem.vehicle_model}</span>
+                  </div>
+                )}
+                {selectedItem.vehicle_trim && (
+                  <div className="item-detail-stat">
+                    <span className="stat-label">Trim</span>
+                    <span className="stat-value">{selectedItem.vehicle_trim}</span>
+                  </div>
+                )}
                 {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
                   <div className="item-detail-stat">
                     <span className="stat-label">Tags</span>
@@ -1246,33 +1199,7 @@ const ResearchView: React.FC = () => {
                 )}
               </div>
 
-              <div className="item-detail-bid-section" style={{ marginTop: '20px', padding: '15px', background: 'var(--surface-sunken)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '1rem' }}>Place Manual Bid</h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>$</span>
-                  <input 
-                    type="number" 
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(e.target.value)}
-                    className="saas-input"
-                    style={{ flex: 1 }}
-                    placeholder={`Current: $${(selectedItem.current_bid).toFixed(2)}`}
-                    disabled={isBidding}
-                  />
-                  <button 
-                    className="save-btn" 
-                    onClick={handlePlaceBid} 
-                    disabled={isBidding || !bidAmount}
-                    style={{ padding: '0.5rem 1rem' }}
-                  >
-                    {isBidding ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : 'Submit Bid'}
-                  </button>
-                </div>
-                {bidError && <div style={{ color: 'var(--error)', marginTop: '8px', fontSize: '0.85rem' }}>{bidError}</div>}
-                {bidSuccess && <div style={{ color: 'var(--emerald-500)', marginTop: '8px', fontSize: '0.85rem', fontWeight: 600 }}>{bidSuccess}</div>}
-              </div>
-
-              <div className="item-detail-actions" style={{ marginTop: '15px', display: 'flex', gap: '8px' }}>
+              <div className="item-detail-actions" style={{ marginTop: 'auto', display: 'flex', gap: '8px' }}>
                 <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="action-btn" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>
                   View Full Auction <ExternalLink size={16} />
                 </a>
@@ -1307,4 +1234,4 @@ const ResearchView: React.FC = () => {
   );
 };
 
-export default ResearchView;
+export default VehiclesView;

@@ -1,0 +1,6 @@
+#!/usr/bin/expect -f
+set timeout 20
+spawn ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no kevin@192.168.0.16 "export PATH=/usr/local/bin:/opt/homebrew/bin:\$PATH; cd '/Volumes/10TB HDD 2/Antigravity Workspace/Auction Master' && docker compose logs --tail=100 backend"
+expect "Password:"
+send "password\r"
+expect eof

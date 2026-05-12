@@ -54,6 +54,48 @@ async def extract_product_name(title: str) -> str:
         # Fallback to a simplified version of the title
         return title[:50]
 
+async def extract_buyers_premium(auction_terms: str, default_pct: float = 15.0) -> float:
+    """
+    Uses a local LLM to extract the buyer's premium percentage from the auction terms.
+    If not found, falls back to the default_pct.
+    """
+    if not auction_terms:
+        return default_pct
+        
+    base_url = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
+    prompt = f"Extract only the buyer's premium percentage from these auction terms. Return ONLY the number as a float (e.g., 15.0 or 18.5). If you cannot confidently find a buyer's premium percentage, return 'NOT_FOUND'. Terms: {auction_terms[:1000]}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                json={
+                    "model": "google/gemma-4-e4b",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1
+                }
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"].strip()
+            
+            # Remove quotes, % symbols, etc.
+            content = content.replace('%', '').strip('"').strip("'").strip()
+            
+            if content == 'NOT_FOUND':
+                return default_pct
+                
+            # Try to convert to float
+            try:
+                return float(content)
+            except ValueError:
+                logger.warning(f"Failed to parse LLM buyer premium output: {content}")
+                return default_pct
+                
+    except Exception as e:
+        logger.error(f"LLM buyer's premium extraction failed: {e}")
+        return default_pct
+
 async def generate_valuation_data(title: str, description: str, raw_category: str) -> dict:
     """
     Uses a local LLM to classify an item, generate tags, and provide a list of eBay search queries
@@ -71,12 +113,23 @@ Hierarchy:
 Instructions:
 1. Choose exactly one Category from the hierarchy keys.
 2. Choose exactly one Type from the selected Category's list.
-3. Generate 2-3 short, descriptive tags (e.g., 'Portable', 'Industrial', 'Vintage', 'New In Box').
-4. Determine the "item_class": "vehicle" (a complete drivable car/truck), "car_part" (a component for a vehicle), or "other".
+3. Determine the "item_class": "vehicle" (a complete drivable car/truck), "car_part" (a component for a vehicle), or "other".
+4. Extract specific item attributes into a "tags" JSON dictionary. Include ONLY the following keys if they are applicable/found:
+   - "Brand": The manufacturer or brand name (e.g., Apple, Ford, DeWalt).
+   - "Model Name / Number": The specific model name or alphanumeric model number.
+   - "Serial Number": If explicitly listed.
+   - "Item Type": A broad, recognizable noun describing what the item actually is (e.g., Laptop, Game Console, Vehicle).
+   - "Color / Finish": The primary color or visual finish.
+   - "Material": What the item is primarily made of.
+   - "Dimensions & Weight": Only include if explicitly provided in the auction data.
+   - "Era / Style": Especially useful for furniture, art, or collectibles.
+   - "Condition Notes": Descriptive terms about its physical or functional state (e.g., Untested, New in Box).
+   - "Features": A fallback list of 2-3 other notable semantic keywords.
+   - "VIN": If the item is a vehicle, extract the exact 17-character alphanumeric Vehicle Identification Number if found.
 5. Provide a list of exactly 3 eBay search queries:
    - If "item_class" is "car_part", the queries MUST include the vehicle Year, Make, Model, and the Part Name.
    - Otherwise, follow standard progression: [0] Highly specific, [1] Slightly broader, [2] Broad fallback.
-6. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (list of strings), "item_class" (string), and "search_queries" (list of strings).
+6. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (dictionary mapping keys to string or list of strings), "item_class" (string), and "search_queries" (list of strings).
 7. Do not include markdown formatting, code blocks, or explanations.
 """
     user_prompt = f"Raw Category: {raw_category}\nTitle: {title}\nDescription: {description[:500] if description else 'N/A'}"
@@ -110,10 +163,19 @@ Instructions:
             if cat not in HIERARCHY:
                 cat = "Other"
             
+            # Parse the tags dictionary
+            raw_tags = result.get("tags", {})
+            if not isinstance(raw_tags, dict):
+                raw_tags = {}
+            
+            # The brand should be extracted from the dictionary for quick column access
+            brand = str(raw_tags.get("Brand", ""))
+            
             return {
                 "category": cat,
                 "type": result.get("type", "General"),
-                "tags": [str(t) for t in result.get("tags", [])[:3]],
+                "tags": raw_tags,
+                "brand": brand,
                 "search_queries": [str(q) for q in result.get("search_queries", []) if q],
                 "item_class": result.get("item_class", "other")
             }
@@ -123,7 +185,7 @@ Instructions:
         return {
             "category": "Unknown",
             "type": "General",
-            "tags": [],
+            "tags": {},
             "search_queries": [title[:50]],
             "item_class": "other"
         }

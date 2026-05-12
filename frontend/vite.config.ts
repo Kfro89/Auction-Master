@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on all local IPs
+    allowedHosts: ['auction.autom8tr.com'],
+    watch: {
+      usePolling: true,
+    },
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://backend:8000',

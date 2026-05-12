@@ -29,3 +29,19 @@ class BaseScraper(ABC):
         Check if the scraper can successfully reach the site and parse the expected format.
         """
         pass
+
+    async def login(self, username: str, password: str = None, session_cookie: str = None) -> bool:
+        """
+        Attempt to authenticate the scraper session.
+        If a session_cookie is provided, use it directly (Pseudo-Auth bypass).
+        Raises specific exceptions on CAPTCHA / 2FA requirements.
+        Returns True on success.
+        """
+        raise NotImplementedError("Login not implemented for this platform.")
+
+    async def place_bid(self, auction_id: str, lot_number: str, amount: float) -> Dict[str, Any]:
+        """
+        Place a manual bid on a specific lot.
+        Returns a dictionary with status, message, and any updated bid details.
+        """
+        raise NotImplementedError("Bidding not implemented for this platform.")

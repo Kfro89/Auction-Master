@@ -66,9 +66,17 @@ class Item(Base):
     brand = Column(String)
     mpn = Column(String)
     
+    # Vehicle specific parameters
+    vin = Column(String, index=True)
+    vehicle_year = Column(Integer)
+    vehicle_make = Column(String)
+    vehicle_model = Column(String)
+    vehicle_trim = Column(String)
+    
     # Enrichment
     category = Column(String)
     tags = Column(JSON, default=list)
+    search_queries = Column(JSON, default=list)
     
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")

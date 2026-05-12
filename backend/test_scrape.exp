@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout 180
+spawn ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no kevin@192.168.0.16 "export PATH=/usr/local/bin:/opt/homebrew/bin:\$PATH; cd '/Volumes/10TB HDD 2/Antigravity Workspace/Auction Master/backend' && python3 -c 'import urllib.request, urllib.parse, json; data = urllib.parse.urlencode({\"username\": \"admin\", \"password\": \"password123\"}).encode(\"utf-8\"); req = urllib.request.Request(\"http://localhost:8000/api/auth/login\", data=data); token = json.loads(urllib.request.urlopen(req).read().decode())[\"access_token\"]; req2 = urllib.request.Request(\"http://localhost:8000/api/admin/scrape/public-surplus\", method=\"POST\"); req2.add_header(\"Authorization\", f\"Bearer {token}\"); print(urllib.request.urlopen(req2).read().decode())' && docker compose logs --tail=100 backend"
+expect {
+    "*assword:*" {
+        send "password\r"
+        exp_continue
+    }
+    eof
+}

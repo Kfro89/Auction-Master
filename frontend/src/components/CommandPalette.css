@@ -56,13 +56,27 @@
   padding: 12px 16px;
   border-radius: 6px;
   cursor: pointer;
-  color: #374151;
+  color: var(--text-main);
   font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.cmd-item:hover {
+.cmd-item:hover,
+.cmd-item.selected {
   background-color: #F3F4F6;
-  color: #059669; /* Emerald on hover */
+  color: #059669; /* Emerald on hover/selected */
+}
+
+.cmd-item-group {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #F3F4F6;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .cmd-empty {

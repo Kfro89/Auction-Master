@@ -3,12 +3,14 @@ import './App.css';
 import Navigation from './components/Navigation';
 import CommandPalette from './components/CommandPalette';
 import ResearchView from './views/ResearchView';
+import VehiclesView from './views/VehiclesView';
 import SettingsView from './views/SettingsView';
 import BiddingView from './views/BiddingView';
 import WorkQueueView from './views/WorkQueueView';
 import StoreView from './views/StoreView';
 import LoginView from './views/LoginView';
 import WatchListView from './views/WatchListView';
+import { CommandProvider } from './contexts/CommandContext';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
@@ -34,6 +36,8 @@ function App() {
     switch (activeTab) {
       case 'research':
         return <ResearchView />;
+      case 'vehicles':
+        return <VehiclesView />;
       case 'watchlist':
         return <WatchListView />;
       case 'bidding':
@@ -50,20 +54,22 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="main-content">
-        <div className="cmd-hint" onClick={() => setIsCmdOpen(true)}>
-          Press ⌘K to open Command Palette
-        </div>
-        {renderContent()}
-      </main>
-      <CommandPalette 
-        isOpen={isCmdOpen} 
-        onClose={() => setIsCmdOpen(false)} 
-        onNavigate={setActiveTab} 
-      />
-    </div>
+    <CommandProvider>
+      <div className="app-shell">
+        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <main className="main-content">
+          <div className="cmd-hint" onClick={() => setIsCmdOpen(true)}>
+            Press ⌘K to open Command Palette
+          </div>
+          {renderContent()}
+        </main>
+        <CommandPalette 
+          isOpen={isCmdOpen} 
+          onClose={() => setIsCmdOpen(false)} 
+          onNavigate={setActiveTab} 
+        />
+      </div>
+    </CommandProvider>
   );
 }
 

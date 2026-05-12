@@ -13,7 +13,7 @@ from .auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 
 from .routers import admin, items, inventory
 from .services.valuation_worker import process_pending_valuations
-from .services.ingestion import ingest_auctioneer_software
+from .services.ingestion import ingest_auctioneer_software, ingest_public_surplus, ingest_bidwrangler
 from .database import SessionLocal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -65,6 +65,21 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 @app.on_event("startup")
 async def start_scheduler():
+    db = SessionLocal()
+    try:
+        defaults = {
+            "public_surplus_zip": "80543",
+            "public_surplus_radius": "200"
+        }
+        for k, v in defaults.items():
+            if not db.query(models.Setting).filter_by(key=k).first():
+                db.add(models.Setting(key=k, value=v))
+        db.commit()
+    except Exception as e:
+        print(f"Error initializing settings: {e}")
+    finally:
+        db.close()
+
     scheduler = AsyncIOScheduler()
     async def sweep_and_valuate_job():
         db = SessionLocal()
@@ -72,6 +87,8 @@ async def start_scheduler():
             print("Starting background sweep and valuate job...")
             await ingest_auctioneer_software(db, "https://www.whitleyauction.com", "rmeb", "Whitley Auction", 18.5)
             await ingest_auctioneer_software(db, "https://bid.rollerauction.com", "rol", "Roller Auction", 13.0)
+            await ingest_bidwrangler(db, "https://bid.dickensheet.com", "dickensheet", "Dickensheet")
+            await ingest_public_surplus(db)
             await process_pending_valuations(db)
             print("Finished background sweep and valuate job.")
         except Exception as e:

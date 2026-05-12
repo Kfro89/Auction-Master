@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 interface WatchedItem {
   id: number;
   title: string;
-  auction_house_id: number;
+  auction_house_key: string;
   current_bid: number;
   end_time: string | null;
   image_url: string;
