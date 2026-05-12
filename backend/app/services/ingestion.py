@@ -19,10 +19,19 @@ async def _process_item_tags(item_to_process: Item, description: str, category_i
     
     classification = await generate_valuation_data(item_to_process.title, description, raw_category)
     
+    if classification.get('category') == "Unknown" and item_to_process.image_url:
+        logger.info(f"Category unknown for '{item_to_process.title}', retrying with image evaluation...")
+        classification = await generate_valuation_data(
+            item_to_process.title,
+            description,
+            raw_category,
+            image_url=item_to_process.image_url
+        )
+    
     # Store category as "Category > Type"
-    structured_category = f"{classification['category']} > {classification['type']}"
+    structured_category = f"{classification.get('category', 'Unknown')} > {classification.get('type', 'General')}"
     brand = classification.get('brand', '')
-    tags = classification['tags'] # This is now a dictionary
+    tags = classification.get('tags', {}) # This is now a dictionary
     
     # If the brand was extracted but missing from the structured tags, add it
     if brand and "Brand" not in tags:
@@ -512,7 +521,7 @@ async def ingest_bidwrangler(db: Session, base_url: str, website_key: str, name:
                         bid_count=lot.get('bid_count', 0),
                         end_time=end_time,
                         status=str(lot.get('status', 'open')).lower(),
-                        url=f"{base_url}/auctions/{ext_id}/lot/{lot_ext_id}",
+                        url=f"{base_url}/ui/auctions/{ext_id}/{lot_ext_id}",
                         image_url=image_url,
                         first_seen_at=datetime.now(timezone.utc),
                         last_seen_at=datetime.now(timezone.utc),

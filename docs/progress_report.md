@@ -87,3 +87,15 @@ Following the completion of the core phases, several critical stability and accu
 - Implemented a Watch List feature to track items across auctions.
 - Added `is_watched` backend tracking and dedicated `WatchListView` in frontend.
 - Added APScheduler automated cleanup to prune items older than 14 days.
+
+### 11. Vehicle Valuation & Secure Settings (Phase 11)
+- **High-Precision Vehicle Valuation:** 
+    - Overhauled vehicle pricing logic with reduced sample size (5 items) and aggressive outlier trimming (20%).
+    - Expanded eBay search to include both `FIXED_PRICE` and `AUCTION` listings for vehicles.
+    - Integrated **MarketCheck API** for on-demand, high-accuracy VIN-based market stats.
+    - Added automated negative keyword filtering (`-parts -salvage`, etc.) to clean search results.
+- **Secure Settings Management:**
+    - Implemented a robust "Settings" dashboard in the frontend for managing API keys (eBay, MarketCheck) and bidder credentials.
+    - Added **Application-Layer Encryption** (Fernet) for all sensitive database records.
+    - Updated backend to automatically recognize and encrypt keys ending in `_secret`, `_api_key`, or `_password`.
+    - Integrated helpful descriptions and direct developer links for all required API keys to improve user onboarding.

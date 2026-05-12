@@ -27,8 +27,8 @@ async def valuate_item_background(item_id: int, premium: float, target_roi: floa
             logger.warning(f"Item {item_id} has no search queries for valuation.")
             return
 
-        client_id = os.environ.get("EBAY_CLIENT_ID")
-        client_secret = os.environ.get("EBAY_CLIENT_SECRET")
+        from .security import get_ebay_credentials
+        client_id, client_secret = get_ebay_credentials(db)
         if not client_id or not client_secret:
             logger.error("eBay credentials not configured. Background valuation skipped.")
             return
@@ -40,13 +40,38 @@ async def valuate_item_background(item_id: int, premium: float, target_roi: floa
         condition_ids = ["3000"] if is_vehicle else (
             [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
         )
+        buying_options = ["FIXED_PRICE", "AUCTION"] if is_vehicle else ["FIXED_PRICE"]
 
         val_data = None
         used_query = None
 
-        for query in item.search_queries:
+        # Prepare queries: for vehicles, append negative keywords and try trim-specific queries if possible
+        queries_to_try = item.search_queries
+        if is_vehicle:
+            negatives = "-parts -salvage -rebuilt -wrecked -engine"
+            refined_queries = []
+            
+            # If we have year/make/model, add a super-specific one first
+            if item.vehicle_year and item.vehicle_make and item.vehicle_model:
+                base_q = f"{item.vehicle_year} {item.vehicle_make} {item.vehicle_model}"
+                if item.vehicle_trim:
+                    refined_queries.append(f"{base_q} {item.vehicle_trim} {negatives}")
+                refined_queries.append(f"{base_q} {negatives}")
+            
+            for q in item.search_queries:
+                if negatives not in q:
+                    refined_queries.append(f"{q} {negatives}")
+                else:
+                    refined_queries.append(q)
+            queries_to_try = refined_queries
+
+        for query in queries_to_try:
             logger.info(f"Background valuating item {item.id} with query '{query}'")
-            results = await browse_client.search_active_listings(query=query, condition_ids=condition_ids)
+            results = await browse_client.search_active_listings(
+                query=query, 
+                condition_ids=condition_ids,
+                buying_options=buying_options
+            )
             item_summaries = results.get("itemSummaries", [])
 
             if not item_summaries:

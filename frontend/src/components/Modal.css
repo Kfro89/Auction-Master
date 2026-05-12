@@ -35,6 +35,10 @@
   width: 800px;
 }
 
+.modal-content.xl {
+  width: 1200px;
+}
+
 .modal-content.full {
   width: 95vw;
   height: 95vh;

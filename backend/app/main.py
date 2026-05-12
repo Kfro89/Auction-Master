@@ -47,9 +47,14 @@ app.include_router(items.router, prefix="/api/items", tags=["items"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["inventory"])
 
 @app.post("/api/auth/login")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    admin_user = os.getenv("ADMIN_USER", "admin")
-    admin_pass = os.getenv("ADMIN_PASS", "password123")
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    admin_user_setting = db.query(models.Setting).filter_by(key="app_admin_username").first()
+    admin_pass_setting = db.query(models.Setting).filter_by(key="app_admin_password").first()
+    
+    admin_user = admin_user_setting.value if admin_user_setting else os.getenv("ADMIN_USER", "admin")
+    
+    from .services.security import decrypt_value
+    admin_pass = decrypt_value(admin_pass_setting.value) if admin_pass_setting else os.getenv("ADMIN_PASS", "password123")
     
     if form_data.username != admin_user or form_data.password != admin_pass:
         raise HTTPException(

@@ -96,7 +96,7 @@ async def extract_buyers_premium(auction_terms: str, default_pct: float = 15.0) 
         logger.error(f"LLM buyer's premium extraction failed: {e}")
         return default_pct
 
-async def generate_valuation_data(title: str, description: str, raw_category: str) -> dict:
+async def generate_valuation_data(title: str, description: str, raw_category: str, image_url: str = None) -> dict:
     """
     Uses a local LLM to classify an item, generate tags, and provide a list of eBay search queries
     (from most specific to broader fallback options).
@@ -132,17 +132,25 @@ Instructions:
 6. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (dictionary mapping keys to string or list of strings), "item_class" (string), and "search_queries" (list of strings).
 7. Do not include markdown formatting, code blocks, or explanations.
 """
-    user_prompt = f"Raw Category: {raw_category}\nTitle: {title}\nDescription: {description[:500] if description else 'N/A'}"
+    user_prompt_text = f"Raw Category: {raw_category}\nTitle: {title}\nDescription: {description[:500] if description else 'N/A'}"
     
+    if image_url:
+        user_message = [
+            {"type": "text", "text": user_prompt_text},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ]
+    else:
+        user_message = user_prompt_text
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{base_url}/chat/completions",
                 json={
                     "model": "google/gemma-4-e4b",
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_message}
                     ],
                     "temperature": 0.1
                 }

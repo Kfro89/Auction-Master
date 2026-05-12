@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_premium: float = 0.0, is_vehicle: bool = False) -> Optional[Dict[str, Any]]:
     initial_sample_size = len(prices)
-    min_size = 25 if is_vehicle else 30
+    min_size = 5 if is_vehicle else 30
     if initial_sample_size < min_size:
         return None
 
@@ -36,7 +36,7 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
     
     # 2. Trimming
     filtered_prices.sort()
-    trim_pct = 0.05 if is_vehicle else 0.15
+    trim_pct = 0.20 if is_vehicle else 0.15
     trim_count = int(len(filtered_prices) * trim_pct)
     if trim_count > 0:
         trimmed_prices = filtered_prices[trim_count:-trim_count]
@@ -50,7 +50,8 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
     trimmed_median = statistics.median(trimmed_prices)
     
     # 3. Market adjustment factor
-    est_market_value = trimmed_median if is_vehicle else trimmed_median * 0.75
+    # For vehicles, we take 90% of the trimmed median (active asking prices)
+    est_market_value = trimmed_median * 0.90 if is_vehicle else trimmed_median * 0.75
     
     # 4. Math for max bid
     # eBay Fees approx = 13.25% + $0.40
@@ -123,91 +124,38 @@ async def extract_and_decode_vin(item: Item, val_meta: dict) -> None:
             except Exception as e:
                 logger.error(f"Failed to decode VIN {vin}: {e}")
 
-async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30) -> Optional[Valuation]:
+async def fetch_marketcheck_valuation(db: Session, vin: str) -> Optional[float]:
     """
-    Performs a full valuation for a single item, including LLM extraction and eBay search.
+    Fetches market value from MarketCheck API based on VIN.
     """
-    item = db.query(Item).filter(Item.id == item_id).first()
-    if not item:
+    from ..models import Setting
+    from .security import decrypt_value
+    
+    api_key_setting = db.query(Setting).filter(Setting.key == "marketcheck_api_key").first()
+    api_key = decrypt_value(api_key_setting.value) if api_key_setting else os.getenv("MARKETCHECK_API_KEY")
+    
+    if not api_key:
         return None
-        
-    auction_house = db.query(AuctionHouse).filter(AuctionHouse.id == item.auction_house_id).first()
-    premium = auction_house.buyer_premium_pct if auction_house and auction_house.buyer_premium_pct else 0.0
+    
+    try:
+        url = f"https://mc-api.marketcheck.com/v2/stats/car?api_key={api_key}&vin={vin}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                retail_stats = data.get("retail", {})
+                median = retail_stats.get("median")
+                if median:
+                    return float(median)
+    except Exception as e:
+        logger.error(f"MarketCheck API call failed: {e}")
+    
+    return None
 
-    # 1. Extract queries and metadata
-    val_meta = await generate_valuation_data(item.title, item.description, item.category or "")
-    queries = val_meta.get("search_queries", [item.title[:50]])
-    if not queries:
-        queries = [item.title[:50]]
-        
-    # Optionally update classification on the item
-    if val_meta.get("category") and val_meta.get("category") != "Unknown":
-        item.category = val_meta["category"]
-        item.tags = val_meta.get("tags", [])
-        db.commit()
-        
+async def _persist_valuation(db: Session, item: Item, val_data: dict, used_query: str, target_roi: float) -> Valuation:
     is_vehicle = item.category and item.category.startswith("Motor Pool") and "Parts" not in item.category
     
-    if is_vehicle:
-        await extract_and_decode_vin(item, val_meta)
-        db.commit()
-    
-    # 2. Setup eBay clients
-    client_id = os.environ.get("EBAY_CLIENT_ID")
-    client_secret = os.environ.get("EBAY_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        raise Exception("eBay credentials not configured")
-        
-    auth_client = EbayAuthClient(client_id=client_id, client_secret=client_secret)
-    browse_client = EbayBrowseClient(auth_client=auth_client)
-    
-    # 3. Determine eBay Category ID for vehicles vs parts
-    item_class = val_meta.get("item_class", "other")
-    category_id = None
-    if is_vehicle:
-        category_id = "6001" # eBay Motors Cars & Trucks
-        condition_ids = ["3000"] # Used for vehicles
-        if item.vehicle_year and item.vehicle_make and item.vehicle_model:
-            queries = [f"{item.vehicle_year} {item.vehicle_make} {item.vehicle_model}"]
-    else:
-        if item_class == "car_part":
-            category_id = "6030" # eBay Motors Parts & Accessories
-        condition_ids = [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
-    
-    val_data = None
-    used_query = None
-    
-    for query in queries:
-        results = await browse_client.search_active_listings(query=query, condition_ids=condition_ids, category_ids=category_id)
-        item_summaries = results.get("itemSummaries", [])
-        
-        if not item_summaries:
-            continue
-            
-        prices = []
-        for summary in item_summaries:
-            price_obj = summary.get("price", {})
-            val = price_obj.get("value")
-            if val:
-                try:
-                    prices.append(float(val))
-                except ValueError:
-                    pass
-                    
-        if not prices:
-            continue
-            
-        # 4. Calculate
-        temp_val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium, is_vehicle=bool(is_vehicle))
-        if temp_val_data:
-            val_data = temp_val_data
-            used_query = query
-            break  # Stop as soon as we have a valid valuation from a query
-
-    if not val_data:
-        return None
-
-    # 5. Persist
+    # Persist sample cache
     sample_cache = EbaySampleCache(
         item_id=item.id,
         query_signature=used_query,
@@ -237,3 +185,142 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     db.refresh(valuation)
 
     return valuation
+
+async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30) -> Optional[Valuation]:
+    """
+    Performs a full valuation for a single item, including LLM extraction and eBay search.
+    """
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        return None
+        
+    auction_house = db.query(AuctionHouse).filter(AuctionHouse.id == item.auction_house_id).first()
+    premium = auction_house.buyer_premium_pct if auction_house and auction_house.buyer_premium_pct else 0.0
+
+    # 1. Extract queries and metadata
+    val_meta = await generate_valuation_data(item.title, item.description, item.category or "")
+    
+    if val_meta.get("category") == "Unknown" and item.image_url:
+        logger.info(f"Category unknown for '{item.title}' in valuation, retrying with image evaluation...")
+        val_meta = await generate_valuation_data(
+            item.title,
+            item.description,
+            item.category or "",
+            image_url=item.image_url
+        )
+        
+    queries = val_meta.get("search_queries", [item.title[:50]])
+    if not queries:
+        queries = [item.title[:50]]
+        
+    # Optionally update classification on the item
+    if val_meta.get("category") and val_meta.get("category") != "Unknown":
+        item.category = val_meta["category"]
+        item.tags = val_meta.get("tags", [])
+        db.commit()
+        
+    is_vehicle = item.category and item.category.startswith("Motor Pool") and "Parts" not in item.category
+    
+    if is_vehicle:
+        await extract_and_decode_vin(item, val_meta)
+        db.commit()
+
+        # Try MarketCheck first for individual valuations
+        if item.vin:
+            mc_price = await fetch_marketcheck_valuation(db, item.vin)
+            if mc_price:
+                logger.info(f"Using MarketCheck price ${mc_price} for VIN {item.vin}")
+                ebay_fees = mc_price * 0.1325 + 0.40
+                premium_decimal = premium / 100.0
+                revenue = mc_price - ebay_fees
+                max_bid = max(0.0, revenue / ((1 + target_roi) * (1 + premium_decimal)))
+                
+                val_data = {
+                    "initial_sample_size": 1,
+                    "sample_size_after_zscore": 1,
+                    "final_sample_size": 1,
+                    "trimmed_median": mc_price,
+                    "mean": mc_price,
+                    "est_market_value": mc_price,
+                    "ebay_fees": ebay_fees,
+                    "max_bid_for_target_roi": max_bid
+                }
+                used_query = f"MARKETCHECK:{item.vin}"
+                return await _persist_valuation(db, item, val_data, used_query, target_roi)
+    
+    # 2. Setup eBay clients
+    from .security import get_ebay_credentials
+    client_id, client_secret = get_ebay_credentials(db)
+    if not client_id or not client_secret:
+        raise Exception("eBay credentials not configured")
+        
+    auth_client = EbayAuthClient(client_id=client_id, client_secret=client_secret)
+    browse_client = EbayBrowseClient(auth_client=auth_client)
+    
+    # 3. Determine eBay Category ID and refine queries for vehicles
+    item_class = val_meta.get("item_class", "other")
+    category_id = None
+    buying_options = ["FIXED_PRICE"]
+    
+    if is_vehicle:
+        category_id = "6001" 
+        condition_ids = ["3000"]
+        buying_options = ["FIXED_PRICE", "AUCTION"]
+        
+        new_queries = []
+        negatives = "-parts -salvage -rebuilt -wrecked -engine"
+        
+        if item.vehicle_year and item.vehicle_make and item.vehicle_model:
+            base_q = f"{item.vehicle_year} {item.vehicle_make} {item.vehicle_model}"
+            if item.vehicle_trim:
+                new_queries.append(f"{base_q} {item.vehicle_trim} {negatives}")
+            new_queries.append(f"{base_q} {negatives}")
+        
+        for q in queries:
+            if negatives not in q:
+                new_queries.append(f"{q} {negatives}")
+        
+        queries = new_queries
+    else:
+        if item_class == "car_part":
+            category_id = "6030"
+        condition_ids = [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
+    
+    val_data = None
+    used_query = None
+    
+    for query in queries:
+        results = await browse_client.search_active_listings(
+            query=query, 
+            condition_ids=condition_ids, 
+            category_ids=category_id,
+            buying_options=buying_options
+        )
+        item_summaries = results.get("itemSummaries", [])
+        
+        if not item_summaries:
+            continue
+            
+        prices = []
+        for summary in item_summaries:
+            price_obj = summary.get("price", {})
+            val = price_obj.get("value")
+            if val:
+                try:
+                    prices.append(float(val))
+                except ValueError:
+                    pass
+                    
+        if not prices:
+            continue
+            
+        temp_val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium, is_vehicle=bool(is_vehicle))
+        if temp_val_data:
+            val_data = temp_val_data
+            used_query = query
+            break
+
+    if not val_data:
+        return None
+
+    return await _persist_valuation(db, item, val_data, used_query, target_roi)

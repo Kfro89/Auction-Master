@@ -57,8 +57,8 @@ async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db), curr
 
     # 3. Trigger eBay Browse API search if title not found in research
     if not title:
-        client_id = os.environ.get("EBAY_CLIENT_ID")
-        client_secret = os.environ.get("EBAY_CLIENT_SECRET")
+        from ..services.security import get_ebay_credentials
+        client_id, client_secret = get_ebay_credentials(db)
         
         if client_id and client_secret:
             try:

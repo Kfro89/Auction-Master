@@ -6,6 +6,7 @@ interface LoginViewProps {
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +18,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
     try {
       const formData = new URLSearchParams();
-      formData.append('username', 'admin'); // Default admin username
+      formData.append('username', username);
       formData.append('password', password);
 
       const response = await fetch('/api/auth/login', {
@@ -35,7 +36,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         onLogin(token);
       } else {
         const errData = await response.json();
-        setError(errData.detail || 'Invalid password');
+        setError(errData.detail || 'Invalid username or password');
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -51,24 +52,33 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         <div className="login-header">
           <div className="logo-placeholder"></div>
           <h1>Auction Master</h1>
-          <p>Please enter the admin password</p>
+          <p>Sign in with your credentials</p>
         </div>
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              autoFocus
+              required
+            />
+          </div>
+          <div className="form-group" style={{ marginTop: '1rem' }}>
+            <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Admin Password"
-              autoFocus
+              placeholder="Password"
               required
             />
           </div>
           
           {error && <div className="login-error">{error}</div>}
           
-          <button type="submit" className="login-btn" disabled={loading || !password}>
+          <button type="submit" className="login-btn" disabled={loading || !username || !password}>
             {loading ? 'Authenticating...' : 'Login'}
           </button>
         </form>

@@ -31,87 +31,108 @@ class PublicSurplusScraper(BaseScraper):
         }]
 
     async def fetch_auction_lots(self, auction_id: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
-        url = f"{self.base_url}/sms/all,co/browse/search"
-        params = {
-            "posting": "y",
-            "milesLocation": self.radius,
-            "zipCode": self.zip_code
-        }
+        url = f"{self.base_url}/sms/browse/search"
+        
+        all_lots = []
+        seen_aucs = set()
+        page = 0
+        MAX_PAGES = 100 # Safety limit
         
         async with httpx.AsyncClient(headers=self.headers, timeout=30.0, follow_redirects=True) as client:
-            try:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                html = response.text
+            while page < MAX_PAGES:
+                params = {
+                    "posting": "y",
+                    "milesLocation": self.radius,
+                    "zipCode": self.zip_code,
+                    "page": str(page)
+                }
                 
-                soup = BeautifulSoup(html, "html.parser")
-                lots = []
-                
-                # Public surplus shows items in a grid or list. 
-                # We can find all links to individual auctions
-                auction_links = soup.select('a[href*="/sms/all,co/auction/view?auc="]')
-                
-                seen_aucs = set()
-                
-                for link in auction_links:
-                    href = link.get("href", "")
-                    match = re.search(r"auc=(\d+)", href)
-                    if not match:
-                        continue
+                try:
+                    logger.debug(f"Fetching Public Surplus page {page} for zip {self.zip_code}")
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    html = response.text
+                    
+                    soup = BeautifulSoup(html, "html.parser")
+                    page_lots_count = 0
+                    
+                    # Public surplus shows items in a grid or list. 
+                    # We can find all links to individual auctions.
+                    # We use a generic selector to catch auctions from any region.
+                    auction_links = soup.select('a[href*="/auction/view?auc="]')
+                    
+                    if not auction_links:
+                        logger.info(f"No more auction links found on page {page}. Stopping.")
+                        break
                         
-                    auc_id = match.group(1)
-                    if auc_id in seen_aucs:
-                        continue
-                    
-                    title = link.get("title", "").replace(f"#{auc_id} - ", "").strip()
-                    if not title:
-                        title = link.get_text(strip=True).replace(f"#{auc_id} - ", "").strip()
-                        if not title or title.isdigit():
-                            # Sometimes the link is just the image wrapper or the ID
+                    for link in auction_links:
+                        href = link.get("href", "")
+                        match = re.search(r"auc=(\d+)", href)
+                        if not match:
                             continue
-                    
-                    seen_aucs.add(auc_id)
-                    
-                    # Try to find price
-                    price = 0.0
-                    price_b = soup.find("b", id=f"val_{auc_id}searchGrid")
-                    if price_b:
-                        price_text = price_b.get_text(strip=True).replace("$", "").replace(",", "")
-                        try:
-                            price = float(price_text)
-                        except ValueError:
-                            pass
                             
-                    # Try to find image
-                    image_url = None
-                    img_tag = soup.select_one(f'a[href*="auc={auc_id}"] img')
-                    if img_tag and img_tag.get("src"):
-                        image_url = img_tag.get("src")
-                        if not image_url.startswith("http"):
-                            image_url = self.base_url + image_url
+                        auc_id = match.group(1)
+                        if auc_id in seen_aucs:
+                            continue
+                        
+                        title = link.get("title", "").replace(f"#{auc_id} - ", "").strip()
+                        if not title:
+                            title = link.get_text(strip=True).replace(f"#{auc_id} - ", "").strip()
+                            if not title or title.isdigit():
+                                # Sometimes the link is just the image wrapper or the ID
+                                continue
+                        
+                        seen_aucs.add(auc_id)
+                        page_lots_count += 1
+                        
+                        # Try to find price
+                        price = 0.0
+                        price_b = soup.find("b", id=f"val_{auc_id}searchGrid")
+                        if price_b:
+                            price_text = price_b.get_text(strip=True).replace("$", "").replace(",", "")
+                            try:
+                                price = float(price_text)
+                            except ValueError:
+                                pass
+                                
+                        # Try to find image
+                        image_url = None
+                        img_tag = soup.select_one(f'a[href*="auc={auc_id}"] img')
+                        if img_tag and img_tag.get("src"):
+                            image_url = img_tag.get("src")
+                            if not image_url.startswith("http"):
+                                image_url = self.base_url + image_url
 
-                    lots.append({
-                        "id": auc_id,
-                        "lot_number": auc_id,
-                        "title": title,
-                        "description": f"Public Surplus Item #{auc_id}",
-                        "price": price,
-                        "current_bid": price,
-                        "end_time": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(), # Default end time if we can't parse it
-                        "status": "open",
-                        "url": f"{self.base_url}{href}",
-                        "primary_image": {"url": image_url} if image_url else None
-                    })
+                        all_lots.append({
+                            "id": auc_id,
+                            "lot_number": auc_id,
+                            "title": title,
+                            "description": f"Public Surplus Item #{auc_id}",
+                            "price": price,
+                            "current_bid": price,
+                            "end_time": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(), # Default end time if we can't parse it
+                            "status": "open",
+                            "url": f"{self.base_url}{href}",
+                            "primary_image": {"url": image_url} if image_url else None
+                        })
                     
-                logger.info(f"Parsed {len(lots)} items from Public Surplus search.")
-                return {"id": auction_id}, lots
-                
-            except Exception as e:
-                logger.error(f"Error fetching Public Surplus lots: {e}")
-                return {"id": auction_id}, []
+                    logger.info(f"Parsed {page_lots_count} new items from Public Surplus page {page}.")
+                    
+                    if page_lots_count == 0:
+                        logger.info(f"All items on page {page} were already seen. Stopping.")
+                        break
+                        
+                    page += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching Public Surplus lots on page {page}: {e}")
+                    break
+
+        logger.info(f"Finished Public Surplus search. Total items: {len(all_lots)}")
+        return {"id": auction_id}, all_lots
 
     async def health_check(self) -> bool:
-        url = f"{self.base_url}/sms/all,co/browse/search"
+        url = f"{self.base_url}/sms/browse/search"
         async with httpx.AsyncClient(headers=self.headers, timeout=10.0) as client:
             try:
                 response = await client.get(url)

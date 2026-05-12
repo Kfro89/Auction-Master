@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Auction Master Capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon128.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+    <h2>Auction Master</h2>
+  </div>
+  
+  <p class="desc">Sync your active auction sessions with your local app.</p>
+
+  <div class="status-container">
+    <div class="site-status" id="status-dickensheet">
+      <span class="dot red"></span> Dickensheet
+    </div>
+    <div class="site-status" id="status-publicsurplus">
+      <span class="dot red"></span> Public Surplus
+    </div>
+    <div class="site-status" id="status-whitley">
+      <span class="dot red"></span> Whitley
+    </div>
+    <div class="site-status" id="status-roller">
+      <span class="dot red"></span> Roller
+    </div>
+  </div>
+
+  <div class="api-config">
+    <label>Local API URL (e.g. http://localhost:8000)</label>
+    <input type="text" id="api-url" value="http://localhost:8000" />
+    <label>Admin Username</label>
+    <input type="text" id="admin-user" value="admin" />
+    <label>Admin Password</label>
+    <input type="password" id="admin-pass" value="admin" />
+  </div>
+
+  <button id="sync-btn" class="btn">Sync Cookies to App</button>
+  <div id="message" class="message hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -30,7 +30,7 @@ async def get_jobs_status(current_user: str = Depends(get_current_user)):
 from ..services.security import encrypt_value, decrypt_value
 
 def is_sensitive_key(key: str) -> bool:
-    return key.endswith("_password") or key.endswith("_cookie") or key.endswith("_secret")
+    return key.endswith("_password") or key.endswith("_cookie") or key.endswith("_secret") or key.endswith("_api_key") or "secret" in key or "token" in key or "key" in key
 
 @router.get("/settings")
 async def get_settings(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
@@ -270,17 +270,62 @@ async def valuate_bulk(req: ValuateBulkRequest, background_tasks: BackgroundTask
     return {"status": "started"}
 
 @router.get("/store/stats")
-async def get_store_stats(current_user: str = Depends(get_current_user)):
-    client_id = os.getenv("EBAY_CLIENT_ID", "dummy")
-    client_secret = os.getenv("EBAY_CLIENT_SECRET", "dummy")
+async def get_store_stats(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    from ..services.security import get_ebay_credentials
+    client_id, client_secret = get_ebay_credentials(db)
     auth_client = EbayAuthClient(client_id, client_secret)
     store_client = EbayStoreClient(auth_client)
     return await store_client.get_sales_stats()
 
 @router.get("/store/listings")
-async def get_store_listings(current_user: str = Depends(get_current_user)):
-    client_id = os.getenv("EBAY_CLIENT_ID", "dummy")
-    client_secret = os.getenv("EBAY_CLIENT_SECRET", "dummy")
+async def get_store_listings(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    from ..services.security import get_ebay_credentials
+    client_id, client_secret = get_ebay_credentials(db)
     auth_client = EbayAuthClient(client_id, client_secret)
     store_client = EbayStoreClient(auth_client)
     return await store_client.get_active_listings()
+
+from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
+from ..scrapers.public_surplus import PublicSurplusScraper
+from ..scrapers.bid_wrangler import BidWranglerApiScraper
+
+@router.post("/settings/verify-login/{website_key}")
+async def verify_login(website_key: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    cookie_setting = db.query(Setting).filter(Setting.key == f"{website_key}_cookie").first()
+    username_setting = db.query(Setting).filter(Setting.key == f"{website_key}_username").first()
+    password_setting = db.query(Setting).filter(Setting.key == f"{website_key}_password").first()
+    
+    session_cookie = decrypt_value(cookie_setting.value) if cookie_setting else None
+    username = username_setting.value if username_setting else None
+    password = decrypt_value(password_setting.value) if password_setting else None
+    
+    if not session_cookie and not username:
+        raise HTTPException(status_code=400, detail="No credentials or session cookie found.")
+        
+    scraper = None
+    if website_key in ["rmeb", "rol"]:
+        base_url = "https://www.whitleyauction.com" if website_key == "rmeb" else "https://bid.rollerauction.com"
+        scraper = AuctioneerSoftwareScraper(base_url=base_url, website_key=website_key)
+    elif website_key == "public_surplus":
+        scraper = PublicSurplusScraper(zip_code="00000", radius="0")
+    elif website_key == "dickensheet":
+        scraper = BidWranglerApiScraper(base_url="https://bid.dickensheet.com")
+    else:
+        raise HTTPException(status_code=400, detail=f"Login verification not supported for {website_key}")
+        
+    try:
+        success = await scraper.login(username=username, password=password, session_cookie=session_cookie)
+        if success:
+            return {"status": "success", "message": f"Login successful for {website_key}!"}
+        else:
+             raise HTTPException(status_code=401, detail="Login failed with provided credentials.")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail={"error": "captcha_or_2fa_required", "message": str(e), "website_key": website_key})
+    except NotImplementedError as e:
+         raise HTTPException(status_code=501, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if hasattr(scraper, 'close'):
+            await scraper.close()
+

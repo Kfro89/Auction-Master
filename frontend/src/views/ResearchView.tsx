@@ -1060,6 +1060,9 @@ const ResearchView: React.FC = () => {
                         clearNewStatus(item.id);
                       }}
                     />
+                    <div className="watch-timer-overlay">
+                      <CountdownTimer endTime={item.end_time} />
+                    </div>
                     {newItemIds.has(item.id) && (
                       <div className="new-badge-overlay grid-overlay">
                         NEW
@@ -1069,10 +1072,6 @@ const ResearchView: React.FC = () => {
                   <div className="research-card-content">
                     
                     <div className="research-card-stats">
-                      <div className="research-card-stat">
-                        <span className="stat-label">Time Left</span>
-                        <span className="stat-value"><CountdownTimer endTime={item.end_time} /></span>
-                      </div>
                       <div className="research-card-stat">
                         <span className="stat-label">Bid</span>
                         <span className="stat-value font-bold">${item.current_bid.toFixed(2)}</span>
@@ -1158,124 +1157,149 @@ const ResearchView: React.FC = () => {
         </button>
       )}
 
-      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="lg">
+      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="xl">
         {selectedItem && (
-          <div className="item-detail-layout">
-            <div className="item-detail-image-panel">
+          <div className="item-detail-layout modern">
+            <div className="item-detail-image-panel-bg">
               {selectedItem.image_url ? (
                 <img
                   src={getHighResImageUrl(selectedItem.image_url)}
                   alt={selectedItem.title}
-                  className="item-detail-image lightbox-img"
+                  className="item-detail-bg-image"
                 />
               ) : (
-                <div className="item-detail-no-image">No Image Available</div>
+                <div className="item-detail-no-image-bg">No Image Available</div>
               )}
             </div>
-            <div className="item-detail-info-panel">
-              <div className="item-detail-header">
-                <h2>{selectedItem.title}</h2>
-                <div className="item-detail-badges">
-                  <span className="item-detail-timer"><CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} /></span>
-                </div>
-              </div>
 
-              <div className="item-detail-stats glass-panel">
-                <div className="item-detail-stat">
-                  <span className="stat-label">Current Bid</span>
-                  <span className="stat-value font-bold">${selectedItem.current_bid?.toFixed(2) || '0.00'}</span>
-                </div>
-                {selectedItem.valuation ? (
-                  <>
-                    <div className="item-detail-stat">
-                      <span className="stat-label">Est. Value</span>
-                      <span className="stat-value text-emerald-600 font-bold">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
-                    </div>
-                    <div className="item-detail-stat">
-                      <span className="stat-label">Max Bid</span>
-                      <span className="stat-value text-blue-600 font-bold">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
-                    </div>
-                    <div className="item-detail-stat">
-                      <span className="stat-label">ROI %</span>
-                      <span className={`roi-badge`}>
-                        {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
+            <div className="item-detail-overlay-content">
+              <div className="item-detail-content-columns">
+                {/* Left Column: Metadata & Research */}
+                <div className="item-detail-col left">
+                  <div className="item-detail-subtitle vertical">
+                    <span className="item-pill vertical time-remaining">
+                      <CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} />
+                    </span>
+                    <span className="item-pill vertical lot-number">Lot #{selectedItem.lot_number}</span>
+                    {selectedItem.category && (
+                      <span className="item-pill vertical category" title={selectedItem.category}>
+                        <LayoutGrid size={14}/> <span className="truncate">{selectedItem.category}</span>
                       </span>
-                    </div>
-                    <div className="item-detail-divider" />
-                    <div className="item-detail-stat">
-                      <span className="stat-label">eBay Search Query</span>
-                      <span className="stat-value">{selectedItem.valuation.search_query || 'Unknown'}</span>
-                    </div>
-                    <div className="item-detail-stat">
-                      <span className="stat-label">Sample Size</span>
-                      <span className="stat-value">{selectedItem.valuation.sample_size || 0}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="item-detail-stat">
-                    <span className="stat-label">Valuation</span>
-                    <span className="stat-value">Not Valuated</span>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="item-detail-extra">
-                <div className="item-detail-stat">
-                  <span className="stat-label">Lot Number</span>
-                  <span className="stat-value mono">{selectedItem.lot_number}</span>
-                </div>
-                {selectedItem.category && (
-                  <div className="item-detail-stat">
-                    <span className="stat-label">Category</span>
-                    <span className="stat-value">{selectedItem.category}</span>
-                  </div>
-                )}
-                {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
-                  <div className="item-detail-stat">
-                    <span className="stat-label">Tags</span>
-                    <span className="stat-value">
-                      <div className="tags-container" style={{ justifyContent: 'flex-end' }}>
+                  {selectedItem.valuation && (
+                    <div className="detail-section">
+                      <h3>Research Info</h3>
+                      <div className="detail-grid">
+                        <div className="detail-item-custom">
+                          <div className="research-query-header">Search Query</div>
+                          <div className="research-query-term">{selectedItem.valuation.search_query}</div>
+                        </div>
+                        <div className="detail-item">
+                          <span className="label">Sample Size</span>
+                          <span className="value">{selectedItem.valuation.sample_size || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="item-detail-spacer"></div>
+
+                  {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
+                    <div className="detail-section no-header">
+                      <div className="tags-pill-container">
                         {normalizeTags(selectedItem.tags).map((tag, idx) => (
-                          <span key={`modal-tag-${idx}`} className={`tag-badge ${tag.key ? 'structured-tag' : ''}`}>
-                            <span className="tag-value">{tag.value}</span>
+                          <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
+                            {tag.value}
                           </span>
                         ))}
                       </div>
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="item-detail-bid-section" style={{ marginTop: '20px', padding: '15px', background: 'var(--surface-sunken)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '1rem' }}>Place Manual Bid</h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>$</span>
-                  <input 
-                    type="number" 
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(e.target.value)}
-                    className="saas-input"
-                    style={{ flex: 1 }}
-                    placeholder={`Current: $${(selectedItem.current_bid).toFixed(2)}`}
-                    disabled={isBidding}
-                  />
-                  <button 
-                    className="save-btn" 
-                    onClick={handlePlaceBid} 
-                    disabled={isBidding || !bidAmount}
-                    style={{ padding: '0.5rem 1rem' }}
-                  >
-                    {isBidding ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : 'Submit Bid'}
-                  </button>
+                    </div>
+                  )}
                 </div>
-                {bidError && <div style={{ color: 'var(--error)', marginTop: '8px', fontSize: '0.85rem' }}>{bidError}</div>}
-                {bidSuccess && <div style={{ color: 'var(--emerald-500)', marginTop: '8px', fontSize: '0.85rem', fontWeight: 600 }}>{bidSuccess}</div>}
-              </div>
 
-              <div className="item-detail-actions" style={{ marginTop: '15px', display: 'flex', gap: '8px' }}>
-                <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="action-btn" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>
-                  View Full Auction <ExternalLink size={16} />
-                </a>
+                {/* Center Column: High-Res Image & Title Overlay */}
+                <div className="item-detail-col center">
+                  <div className="item-detail-title-card">
+                    <h2>{selectedItem.title}</h2>
+                  </div>
+                  {selectedItem.image_url ? (
+                    <img
+                      src={getHighResImageUrl(selectedItem.image_url)}
+                      alt={selectedItem.title}
+                      className="item-detail-center-image"
+                    />
+                  ) : (
+                    <div className="item-detail-no-image-bg">No Image Available</div>
+                  )}
+                </div>
+
+                {/* Right Column: ROI, Stats, and Actions */}
+                <div className="item-detail-col right">
+                  <div className="item-detail-kpi-tile bid">
+                    <div className="kpi-label">Current Bid</div>
+                    <div className="kpi-value">${selectedItem.current_bid?.toFixed(2)}</div>
+                  </div>
+
+                  <div className="detail-section">
+                    <h3>Bidding & Value</h3>
+                    <div className="detail-grid">
+                      {selectedItem.valuation && (
+                        <>
+                          <div className="detail-item">
+                            <span className="label">Est. Value</span>
+                            <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
+                          </div>
+                          <div className="detail-item">
+                            <span className="label">Max Bid</span>
+                            <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="detail-section no-header">
+                    <div className="item-detail-bid-section-modern">
+                      <div className="bid-input-group">
+                        <span className="currency-symbol">$</span>
+                        <input 
+                          type="number" 
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          className="modern-bid-input"
+                          placeholder={`Min: $${(selectedItem.current_bid + 1).toFixed(0)}`}
+                          disabled={isBidding}
+                        />
+                        <button 
+                          className="modern-bid-btn" 
+                          onClick={handlePlaceBid} 
+                          disabled={isBidding || !bidAmount}
+                        >
+                          {isBidding ? <Loader2 size={16} className="spinning" /> : 'Bid'}
+                        </button>
+                      </div>
+                      {bidError && <div className="bid-msg error">{bidError}</div>}
+                      {bidSuccess && <div className="bid-msg success">{bidSuccess}</div>}
+                    </div>
+
+                    <div className="action-row" style={{ marginTop: '12px' }}>
+                      <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
+                        View Full Auction <ExternalLink size={14} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {selectedItem.valuation && (
+                    <div className="item-detail-kpi-tile roi">
+                      <div className="kpi-label">ROI</div>
+                      <div className="kpi-value">
+                        {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

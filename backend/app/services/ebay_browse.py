@@ -7,7 +7,7 @@ class EbayBrowseClient:
         self.auth_client = auth_client
         self.base_url = "https://api.ebay.com/buy/browse/v1"
 
-    async def search_active_listings(self, query: str, condition_ids: List[str], category_ids: str = None) -> Dict[str, Any]:
+    async def search_active_listings(self, query: str, condition_ids: List[str], category_ids: str = None, buying_options: List[str] = ["FIXED_PRICE"]) -> Dict[str, Any]:
         token = await self.auth_client.get_token()
         
         headers = {
@@ -16,7 +16,8 @@ class EbayBrowseClient:
         }
         
         conditions_str = "|".join(condition_ids)
-        filter_str = f"buyingOptions:{{FIXED_PRICE}},conditionIds:{{{conditions_str}}}"
+        options_str = "|".join(buying_options)
+        filter_str = f"buyingOptions:{{{options_str}}},conditionIds:{{{conditions_str}}}"
         
         params = {
             "q": query,
