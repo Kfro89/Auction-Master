@@ -7,6 +7,8 @@ import Tooltip from '../components/Tooltip';
 import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff, Loader2, AlignLeft, AlignCenter, AlignRight, Save, LayoutGrid, List, Target } from 'lucide-react';
 import { useCommandContext } from '../contexts/CommandContext';
 import type { Command } from '../contexts/CommandContext';
+import { CountdownTimer } from '../components/CountdownTimer';
+import { normalizeTags, getHighResImageUrl } from '../utils/formatters';
 
 interface Item {
   id: number;
@@ -32,71 +34,6 @@ interface Item {
   is_user_bidding?: boolean;
 }
 
-const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
-  const [timeLeft, setTimeLeft] = useState<string>('');
-
-  useEffect(() => {
-    if (!endTime) {
-      setTimeLeft('Unknown');
-      return;
-    }
-
-    const calculateTime = () => {
-      const now = new Date().getTime();
-      const end = new Date(endTime).getTime();
-      
-      if (isNaN(end)) {
-        setTimeLeft('Unknown');
-        return;
-      }
-
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setTimeLeft('Ending Now');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h`);
-      } else if (hours > 0) {
-        setTimeLeft(`${hours}h ${mins}m`);
-      } else if (mins > 0) {
-        setTimeLeft(`${mins}m ${secs}s`);
-      } else {
-        setTimeLeft(`${secs}s`);
-      }
-    };
-
-    calculateTime();
-    const timer = setInterval(calculateTime, 1000);
-    return () => clearInterval(timer);
-  }, [endTime]);
-
-  return <span className={`timer-text ${timeLeft === 'Ending Now' ? 'ending-now' : ''}`}>{timeLeft}</span>;
-};
-
-const normalizeTags = (tags: any): { key: string | null, value: string, fullTag: string }[] => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string').map(t => ({ key: null, value: t, fullTag: t }));
-  if (typeof tags === 'object') {
-    const result: { key: string, value: string, fullTag: string }[] = [];
-    for (const [key, val] of Object.entries(tags)) {
-      if (Array.isArray(val)) {
-        val.forEach(v => result.push({ key, value: String(v), fullTag: `${key}: ${v}` }));
-      } else if (val !== null && val !== undefined && String(val).trim() !== '') {
-        result.push({ key, value: String(val), fullTag: `${key}: ${val}` });
-      }
-    }
-    return result;
-  }
-  return [];
-};
 
 export interface ColumnConfig {
   width: number;
@@ -518,11 +455,7 @@ const ResearchView: React.FC = () => {
     }
   };
 
-  const getHighResImageUrl = (url: string) => {
-    if (!url) return '';
-    // Replace typical patterns from scraping for high-res images
-    return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
-  };
+
 
   const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
     try {
@@ -979,7 +912,7 @@ const ResearchView: React.FC = () => {
                       ) : '--'}
                     </td>
                     <td style={getColStyle('time')}>
-                      <CountdownTimer endTime={item.end_time} />
+                      <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
                     </td>
                     <td style={getColStyle('actions')}>
                       <div className="action-buttons-cell">
@@ -1058,7 +991,7 @@ const ResearchView: React.FC = () => {
                       }}
                     />
                     <div className="watch-timer-overlay">
-                      <CountdownTimer endTime={item.end_time} />
+                      <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
                     </div>
                     {newItemIds.has(item.id) && (
                       <div className="new-badge-overlay grid-overlay">

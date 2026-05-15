@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './WatchListView.css';
 import { X, ExternalLink, Loader2 } from 'lucide-react';
 import ItemDetailModal from '../components/ItemDetailModal';
+import { CountdownTimer } from '../components/CountdownTimer';
+import { getHighResImageUrl } from '../utils/formatters';
 
 interface WatchedItem {
   id: number;
@@ -24,40 +26,8 @@ interface WatchedItem {
 }
 
 
-const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
-  const [timeLeft, setTimeLeft] = useState<string>('');
 
-  useEffect(() => {
-    if (!endTime) return;
 
-    const calculateTime = () => {
-      const now = new Date().getTime();
-      const end = new Date(endTime).getTime();
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setTimeLeft('Ended');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (days > 0) setTimeLeft(`${days}d ${hours}h`);
-      else if (hours > 0) setTimeLeft(`${hours}h ${mins}m`);
-      else if (mins > 0) setTimeLeft(`${mins}m ${secs}s`);
-      else setTimeLeft(`${secs}s`);
-    };
-
-    calculateTime();
-    const timer = setInterval(calculateTime, 1000);
-    return () => clearInterval(timer);
-  }, [endTime]);
-
-  return <span className={`watch-timer ${timeLeft === 'Ended' ? 'ended' : ''}`}>{timeLeft}</span>;
-};
 
 const WatchListView: React.FC = () => {
   const targetRoi = parseInt(localStorage.getItem('targetRoi') || '30', 10);
@@ -103,8 +73,8 @@ const WatchListView: React.FC = () => {
         ));
         setSelectedItem(prev => prev && prev.id === itemId ? { ...prev, valuation: newValuation } : prev);
       } else {
-        await response.json().catch(() => ({ detail: "Valuation failed" }));
-        console.error(`Failed to valuate item ${itemId}`);
+        const errData = await response.json().catch(() => ({ detail: "Valuation failed" }));
+        console.error(`Failed to valuate item ${itemId}:`, errData.detail);
       }
     } catch (error) {
       console.error(`Error valuating item ${itemId}:`, error);
@@ -122,10 +92,7 @@ const WatchListView: React.FC = () => {
     }
   };
 
-  const getHighResImageUrl = (url: string) => {
-    if (!url) return '';
-    return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
-  };
+
 
   const fetchWatchlist = async () => {
     try {
@@ -221,7 +188,7 @@ const WatchListView: React.FC = () => {
                       <div className="watch-card-no-image">No Image</div>
                    )}
                    <div className="watch-timer-overlay">
-                      <CountdownTimer endTime={item.end_time} />
+                      <CountdownTimer endTime={item.end_time} className="watch-timer" endedText="Ended" endedClassName="ended" />
                    </div>
                 </div>
                 

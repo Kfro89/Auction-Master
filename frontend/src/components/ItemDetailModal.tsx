@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './ItemDetailModal.css';
 import Modal from './Modal';
 import { CalendarDays, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CountdownTimer } from './CountdownTimer';
+import { normalizeTags, getHighResImageUrl } from '../utils/formatters';
 
 export interface ModalItem {
   id: number;
@@ -31,76 +33,6 @@ interface ItemDetailModalProps {
   children?: React.ReactNode;
 }
 
-const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
-  const [timeLeft, setTimeLeft] = useState<string>('');
-
-  useEffect(() => {
-    if (!endTime) {
-      setTimeLeft('Unknown');
-      return;
-    }
-
-    const calculateTime = () => {
-      const now = new Date().getTime();
-      const end = new Date(endTime).getTime();
-      
-      if (isNaN(end)) {
-        setTimeLeft('Unknown');
-        return;
-      }
-
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setTimeLeft('Ended');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h`);
-      } else if (hours > 0) {
-        setTimeLeft(`${hours}h ${mins}m`);
-      } else if (mins > 0) {
-        setTimeLeft(`${mins}m ${secs}s`);
-      } else {
-        setTimeLeft(`${secs}s`);
-      }
-    };
-
-    calculateTime();
-    const timer = setInterval(calculateTime, 1000);
-    return () => clearInterval(timer);
-  }, [endTime]);
-
-  return <span>{timeLeft}</span>;
-};
-
-const normalizeTags = (tags: any): { key: string | null, value: string, fullTag: string }[] => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string').map(t => ({ key: null, value: t, fullTag: t }));
-  if (typeof tags === 'object') {
-    const result: { key: string, value: string, fullTag: string }[] = [];
-    for (const [key, val] of Object.entries(tags)) {
-      if (Array.isArray(val)) {
-        val.forEach(v => result.push({ key, value: String(v), fullTag: `${key}: ${v}` }));
-      } else if (val !== null && val !== undefined && String(val).trim() !== '') {
-        result.push({ key, value: String(val), fullTag: `${key}: ${val}` });
-      }
-    }
-    return result;
-  }
-  return [];
-};
-
-export const getHighResImageUrl = (url: string) => {
-  if (!url) return '';
-  return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
-};
 
 const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, isOpen, onClose, children }) => {
   const [imageIndex, setImageIndex] = useState(0);
