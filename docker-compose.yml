@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   db:
@@ -27,6 +27,9 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
+    dns:
+      - 1.1.1.1
+      - 192.168.0.1
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-auction_user}:${POSTGRES_PASSWORD:-auction_pass}@db:5432/${POSTGRES_DB:-auction_db}
     depends_on:
