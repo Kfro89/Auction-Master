@@ -27,6 +27,7 @@ const SettingsView: React.FC = () => {
     marketcheck_api_key: '',
     whitley_bidder_id: '',
     roller_bidder_id: '',
+    dickensheet_bidder_id: '',
     public_surplus_zip: '',
     public_surplus_radius: '',
     rmeb_username: '', rmeb_password: '', rmeb_cookie: '',
@@ -323,9 +324,20 @@ const SettingsView: React.FC = () => {
                 placeholder="Enter Roller Bidder ID"
               />
             </div>
+            <div className="form-group">
+              <label htmlFor="dickensheet_bidder_id">Dickensheet Bidder ID</label>
+              <input
+                id="dickensheet_bidder_id"
+                name="dickensheet_bidder_id"
+                type="text"
+                value={settings.dickensheet_bidder_id || ''}
+                onChange={handleChange}
+                placeholder="Enter Dickensheet Bidder ID"
+              />
+            </div>
             <button 
               className="save-btn mt-4" 
-              onClick={() => saveSettings(['whitley_bidder_id', 'roller_bidder_id'], 'bidders')}
+              onClick={() => saveSettings(['whitley_bidder_id', 'roller_bidder_id', 'dickensheet_bidder_id'], 'bidders')}
               disabled={saving === 'bidders'}
             >
               {saving === 'bidders' ? 'Saving...' : 'Save Bidder IDs'}
@@ -459,7 +471,7 @@ const SettingsView: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2>Public Surplus Integration</h2>
               <div>
-                <button className="action-btn" onClick={() => openCaptureTab('https://www.publicsurplus.com/sms/login/user')} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginRight: '0.5rem' }}>
+                <button className="action-btn" onClick={() => openCaptureTab('https://www.publicsurplus.com/sms/login/login')} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginRight: '0.5rem' }}>
                   Login & Capture
                 </button>
                 <button className="action-btn" onClick={() => verifyLogin('public_surplus')} disabled={verifying === 'public_surplus'} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>

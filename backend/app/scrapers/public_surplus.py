@@ -161,3 +161,33 @@ class PublicSurplusScraper(BaseScraper):
             
         # Stub for bid submission
         raise NotImplementedError("Direct bidding structure not fully mapped for Public Surplus yet.")
+
+    async def fetch_my_bids(self) -> List[str]:
+        """
+        Fetches the user's active bids dashboard using the session cookie 
+        and extracts a list of auction/lot IDs the user is currently bidding on.
+        """
+        if "Cookie" not in self.headers:
+            return []
+            
+        url = f"{self.base_url}/sms/mys/bids?tm=m"
+        
+        async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                bidding_ids = []
+                # Grab all 'auc=' links from the dashboard which represent items they are interacting with
+                links = soup.select('a[href*="auc="]')
+                for link in links:
+                    href = link.get('href', '')
+                    match = re.search(r"auc=(\d+)", href)
+                    if match:
+                        bidding_ids.append(match.group(1))
+                        
+                return list(set(bidding_ids))
+            except Exception as e:
+                logger.error(f"Error fetching Public Surplus my bids: {e}")
+                return []

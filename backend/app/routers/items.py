@@ -23,9 +23,11 @@ def serialize_item(item: Item) -> dict:
         "image_url": item.image_url,
         "auction_house_id": item.auction_house_id,
         "auction_house_key": item.auction_house.website_key if item.auction_house else None,
+        "auction_house_name": item.auction_house.name if item.auction_house else None,
         "category": item.category,
         "tags": item.tags,
         "is_watched": getattr(item, 'is_watched', False),
+        "is_user_bidding": getattr(item, 'is_user_bidding', False),
         "vin": getattr(item, 'vin', None),
         "vehicle_year": getattr(item, 'vehicle_year', None),
         "vehicle_make": getattr(item, 'vehicle_make', None),
@@ -52,8 +54,14 @@ def serialize_item(item: Item) -> dict:
 
 @router.get("/")
 async def list_items(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    # Fetch items with their valuations and auction house
-    items = db.query(Item).options(joinedload(Item.valuation).joinedload(Valuation.sample_cache), joinedload(Item.auction_house)).order_by(Item.end_time.asc()).all()
+    from sqlalchemy.sql import func
+    # Fetch items with their valuations and auction house, filtering out expired ones
+    items = db.query(Item).options(
+        joinedload(Item.valuation).joinedload(Valuation.sample_cache), 
+        joinedload(Item.auction_house)
+    ).filter(
+        (Item.end_time >= func.now()) | (Item.end_time.is_(None))
+    ).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]
 
 @router.post("/{item_id}/watch")

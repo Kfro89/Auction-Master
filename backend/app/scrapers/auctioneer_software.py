@@ -60,13 +60,20 @@ class AuctioneerSoftwareScraper(BaseScraper):
         """
         # For both Whitley and Roller, the upcoming auctions are on the homepage or /auction-calendar
         url = f"{self.base_url}/auction-calendar"
-        response = await self.client.get(url)
-        if response.status_code == 404:
-            # Roller often uses just the homepage
-            url = f"{self.base_url}/"
-            response = await self.client.get(url)
-            
-        response.raise_for_status()
+        for attempt in range(3):
+            try:
+                response = await self.client.get(url)
+                if response.status_code == 404:
+                    # Roller often uses just the homepage
+                    url = f"{self.base_url}/"
+                    response = await self.client.get(url)
+                    
+                response.raise_for_status()
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(2)
         
         state = self._extract_apollo_state(response.text)
         auctions = []
@@ -167,6 +174,51 @@ class AuctioneerSoftwareScraper(BaseScraper):
             return True
             
         raise NotImplementedError("Standard HTTP login not implemented yet. Use session cookie bypass.")
+
+    async def fetch_my_bidder_id(self) -> str:
+        """
+        Attempts to extract the logged-in user's Bidder Number from the Apollo State.
+        """
+        if not self.client.cookies:
+            return None
+            
+        try:
+            for attempt in range(3):
+                try:
+                    response = await self.client.get(f"{self.base_url}/")
+                    response.raise_for_status()
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(2)
+            
+            state = self._extract_apollo_state(response.text)
+            
+            # 1. Look for currentUser to get the ID
+            root = state.get("ROOT_QUERY", {})
+            user_ref = None
+            for k, v in root.items():
+                if ("currentUser" in k or "me" in k or "viewer" in k) and isinstance(v, dict) and "__ref" in v:
+                    user_ref = v["__ref"]
+                    break
+                    
+            if user_ref and user_ref in state:
+                user_obj = state[user_ref]
+                return str(user_obj.get("bidderNumber") or user_obj.get("id") or user_ref.split(":")[1])
+                
+            # 2. Fallback: Search all User objects
+            for key, value in state.items():
+                if key.startswith("User:") and isinstance(value, dict):
+                    if "bidderNumber" in value and value["bidderNumber"]:
+                        return str(value["bidderNumber"])
+                    if "id" in value and value["id"]:
+                        return str(value["id"])
+                        
+        except Exception as e:
+            print(f"Failed to extract bidder ID from {self.base_url} state:", e)
+            
+        return None
 
     async def place_bid(self, auction_id: str, lot_number: str, amount: float) -> Dict[str, Any]:
         """

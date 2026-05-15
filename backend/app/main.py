@@ -166,46 +166,6 @@ def health_check(db: Session = Depends(get_db)):
 
     return {"status": "ok", "database": db_status}
 
-@app.get("/debug/llm-connectivity")
-async def debug_llm_connectivity():
-    """TEMPORARY diagnostic endpoint - remove after debugging."""
-    import httpx
-    llm_base_url = os.getenv("LLM_BASE_URL", "NOT_SET (defaulting to http://localhost:1234/v1)")
-    effective_url = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
-    
-    result = {
-        "LLM_BASE_URL_env": llm_base_url,
-        "effective_url": effective_url,
-        "models_endpoint": None,
-        "completion_test": None,
-        "error": None,
-    }
-    
-    # Test 1: Can we reach /v1/models?
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{effective_url}/models")
-            result["models_endpoint"] = {"status": resp.status_code, "body": resp.json()}
-    except Exception as e:
-        result["models_endpoint"] = {"error": str(e)}
-    
-    # Test 2: Can we do a simple completion?
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                f"{effective_url}/chat/completions",
-                json={
-                    "model": "google/gemma-4-e4b",
-                    "messages": [{"role": "user", "content": "Say OK"}],
-                    "temperature": 0.1,
-                    "max_tokens": 5
-                }
-            )
-            result["completion_test"] = {"status": resp.status_code, "body": resp.json()}
-    except Exception as e:
-        result["completion_test"] = {"error": str(e)}
-    
-    return result
 
 @app.get("/")
 def read_root():

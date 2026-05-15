@@ -8,6 +8,7 @@ from ..scrapers.public_surplus import PublicSurplusScraper
 from ..scrapers.bid_wrangler import BidWranglerApiScraper
 from .llm import generate_valuation_data, extract_buyers_premium
 from .valuation_worker import valuate_item_background
+from .security import decrypt_value
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,17 +46,10 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
     Returns a dict with status and new_items count.
     """
     # 1. Fetch stored Bidder IDs from settings
-    settings_record = db.query(Setting).filter(Setting.key == "bidder_ids").first()
+    settings_record = db.query(Setting).filter(Setting.key == f"{website_key}_bidder_id").first()
     user_bidder_ids = []
     if settings_record and settings_record.value:
-        try:
-            val = json.loads(settings_record.value)
-            if isinstance(val, dict):
-                user_bidder_ids = [str(v) for v in val.values() if v]
-            else:
-                user_bidder_ids = [str(val)]
-        except:
-            user_bidder_ids = [str(settings_record.value)]
+        user_bidder_ids = [str(settings_record.value)]
 
     # 2. Ensure AuctionHouse exists
     house = db.query(AuctionHouse).filter(AuctionHouse.website_key == website_key).first()
@@ -72,6 +66,18 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
 
     scraper = AuctioneerSoftwareScraper(base_url=base_url, website_key=website_key)
     
+    # 3. Try to authenticate via Session Cookie to extract Bidder ID automatically
+    # For Whitley (rmeb) or Roller (rol)
+    cookie_setting = db.query(Setting).filter(Setting.key == f"{website_key}_cookie").first()
+    if cookie_setting and cookie_setting.value:
+        session_cookie = decrypt_value(cookie_setting.value)
+        if session_cookie:
+            await scraper.login(username="", session_cookie=session_cookie)
+            my_bidder_id = await scraper.fetch_my_bidder_id()
+            if my_bidder_id and my_bidder_id not in user_bidder_ids:
+                user_bidder_ids.append(str(my_bidder_id))
+                logger.info(f"{name}: Automatically extracted Bidder ID '{my_bidder_id}' from session cookie.")
+
     total_new_items = 0
     try:
         auctions_data = await scraper.discover_active_auctions()
@@ -277,6 +283,16 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
 
     scraper = PublicSurplusScraper(zip_code=zip_code, radius=radius)
     
+    # Try to fetch user's active bids using the cookie
+    cookie_setting = db.query(Setting).filter(Setting.key == "public_surplus_cookie").first()
+    my_bid_ids = []
+    if cookie_setting and cookie_setting.value:
+        session_cookie = decrypt_value(cookie_setting.value)
+        if session_cookie:
+            await scraper.login(username="", session_cookie=session_cookie)
+            my_bid_ids = await scraper.fetch_my_bids()
+            logger.info(f"Public Surplus: Found {len(my_bid_ids)} active bids for user.")
+    
     total_new_items = 0
     try:
         auctions_data = await scraper.discover_active_auctions()
@@ -309,7 +325,7 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
                 item = db.query(Item).filter(Item.external_id == lot_ext_id, Item.auction_house_id == house.id).first()
                 
                 # Public Surplus doesn't have a reliable 'is user bidding' flag from the search without auth
-                is_user_bidding = False
+                is_user_bidding = lot_ext_id in my_bid_ids
                 
                 category_id = "Public Surplus"
                 description = lot.get('description', '')
@@ -390,17 +406,10 @@ async def ingest_bidwrangler(db: Session, base_url: str, website_key: str, name:
     Orchestrates the scraping and ingestion of data from a BidWrangler platform (like Dickensheet).
     """
     # Fetch stored Bidder IDs
-    settings_record = db.query(Setting).filter(Setting.key == "bidder_ids").first()
+    settings_record = db.query(Setting).filter(Setting.key == f"{website_key}_bidder_id").first()
     user_bidder_ids = []
     if settings_record and settings_record.value:
-        try:
-            val = json.loads(settings_record.value)
-            if isinstance(val, dict):
-                user_bidder_ids = [str(v) for v in val.values() if v]
-            else:
-                user_bidder_ids = [str(val)]
-        except:
-            user_bidder_ids = [str(settings_record.value)]
+        user_bidder_ids = [str(settings_record.value)]
 
     # Ensure AuctionHouse exists
     # Default premium is 0.0 initially, we dynamically extract per auction

@@ -34,7 +34,7 @@ class Auction(Base):
     location_zip = Column(String)
 
     auction_house = relationship("AuctionHouse", back_populates="auctions")
-    items = relationship("Item", back_populates="auction")
+    items = relationship("Item", back_populates="auction", cascade="all, delete-orphan")
 
 
 class Item(Base):
@@ -80,7 +80,8 @@ class Item(Base):
     
     auction_house = relationship("AuctionHouse", back_populates="items")
     auction = relationship("Auction", back_populates="items")
-    valuation = relationship("Valuation", back_populates="item", uselist=False)
+    valuation = relationship("Valuation", back_populates="item", uselist=False, cascade="all, delete-orphan")
+    sample_caches = relationship("EbaySampleCache", cascade="all, delete-orphan")
     
     is_user_bidding = Column(Boolean, default=False)
     is_watched = Column(Boolean, default=False, server_default='false')
@@ -143,3 +144,23 @@ class InventoryItem(Base):
     images = Column(JSON, default=list)
     status = Column(String, default='staged') # staged, listed, sold
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
+
+from sqlalchemy import UniqueConstraint
+
+class UserAuctionCredential(Base):
+    __tablename__ = "user_auction_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=False) # To tie to the user system (mocked or actual)
+    auction_house = Column(String, index=True, nullable=False) # e.g., 'public_surplus'
+    encrypted_cookies = Column(String, nullable=False)
+    user_agent = Column(String)
+    is_valid = Column(Boolean, default=True)
+    last_verified_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'auction_house', name='uq_user_auction_house'),
+    )

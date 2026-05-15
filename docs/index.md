@@ -13,6 +13,7 @@ This directory contains the core documentation for the Auction Arbitrage project
 
 ## 🛠 Technical Manifests
 - **[api_manifest.md](./api_manifest.md)**: **CRITICAL.** Consolidated research on eBay Browse API, Public Surplus API, and reverse-engineered GraphQL/Apollo structures for Whitley and Roller Auction. Includes fee structures and condition mapping enums.
+- **[superpowers/specs/2026-05-08-item-hierarchy.md](./superpowers/specs/2026-05-08-item-hierarchy.md)**: Defines the standardized Item Hierarchy mapping for cross-referencing auction lots to eBay categories.
 
 ## 🏠 Auction House Research
 Raw data, capture notes, and schema structures for individual sources:
@@ -34,6 +35,10 @@ Designs and implementation plans for the comprehensive web interface, staging wo
 - **[superpowers/plans/2026-05-08-work-queue-implementation.md](./superpowers/plans/2026-05-08-work-queue-implementation.md)**: Phase 5 Plan.
 - **[superpowers/plans/2026-05-08-store-analytics-implementation.md](./superpowers/plans/2026-05-08-store-analytics-implementation.md)**: Phase 6 Plan.
 - **[superpowers/plans/2026-05-08-polish-readiness.md](./superpowers/plans/2026-05-08-polish-readiness.md)**: Phase 7 Plan.
+
+## 📱 Mobile Application
+Documentation specifically covering the Flutter mobile application counterpart to the ERP Suite:
+- **[mobile_app_testing_guide.md](./mobile_app_testing_guide.md)**: Essential guide covering mobile architecture, backend connectivity, deployment gotchas, and iOS testing constraints.
 
 ---
 

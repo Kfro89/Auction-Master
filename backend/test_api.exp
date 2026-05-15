@@ -1,0 +1,6 @@
+#!/usr/bin/expect -f
+set timeout 10
+spawn ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no kevin@192.168.0.16 "curl -s http://localhost:8000/api/admin/jobs/status"
+expect "Password:"
+send "password\r"
+expect eof

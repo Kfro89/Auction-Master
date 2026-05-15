@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './BiddingView.css';
 import { useSortableData } from '../hooks/useSortableData';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, RefreshCw } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -23,6 +23,7 @@ interface Item {
 const BiddingView: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchItems = async () => {
     try {
@@ -35,6 +36,24 @@ const BiddingView: React.FC = () => {
       console.error('Failed to fetch bidding items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshActiveBids = async () => {
+    setRefreshing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/refresh-active-bids', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        await fetchItems();
+      }
+    } catch (error) {
+      console.error('Failed to refresh active bids:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -92,6 +111,15 @@ const BiddingView: React.FC = () => {
           <h2>Total Active Bids</h2>
           <div className="summary-stat">{items.length}</div>
         </div>
+        <button
+          className="refresh-bids-btn"
+          onClick={refreshActiveBids}
+          disabled={refreshing}
+          title="Refresh active bids from all logged-in accounts"
+        >
+          <RefreshCw size={18} className={refreshing ? 'spin' : ''} />
+          {refreshing ? 'Updating...' : 'Update Bids'}
+        </button>
       </header>
 
       <section className="grid-section">

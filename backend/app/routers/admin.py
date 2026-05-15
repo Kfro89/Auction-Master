@@ -115,31 +115,47 @@ async def scrape_all_task():
 
         # Step 1: Whitley
         job.update({"step": 1, "message": "Scanning Whitley Auction..."})
-        result = await ingest_auctioneer_software(db, "https://www.whitleyauction.com", "rmeb", "Whitley Auction", 18.5, progress=job)
-        count = result.get("new_items", 0)
-        total_new += count
-        job.update({"message": f"Whitley Auction — {count} new items found", "new_items": total_new})
+        try:
+            result = await ingest_auctioneer_software(db, "https://www.whitleyauction.com", "rmeb", "Whitley Auction", 18.5, progress=job)
+            count = result.get("new_items", 0)
+            total_new += count
+            job.update({"message": f"Whitley Auction — {count} new items found", "new_items": total_new})
+        except Exception as e:
+            logger.error(f"Error scanning Whitley: {e}")
+            job.update({"message": f"Whitley Failed: {str(e)[:40]}"})
 
         # Step 2: Roller
         job.update({"step": 2, "message": "Scanning Roller Auction..."})
-        result = await ingest_auctioneer_software(db, "https://bid.rollerauction.com", "rol", "Roller Auction", 13.0, progress=job)
-        count = result.get("new_items", 0)
-        total_new += count
-        job.update({"message": f"Roller Auction — {count} new items found", "new_items": total_new})
+        try:
+            result = await ingest_auctioneer_software(db, "https://bid.rollerauction.com", "rol", "Roller Auction", 13.0, progress=job)
+            count = result.get("new_items", 0)
+            total_new += count
+            job.update({"message": f"Roller Auction — {count} new items found", "new_items": total_new})
+        except Exception as e:
+            logger.error(f"Error scanning Roller: {e}")
+            job.update({"message": f"Roller Failed: {str(e)[:40]}"})
 
         # Step 3: Dickensheet
         job.update({"step": 3, "message": "Scanning Dickensheet..."})
-        result = await ingest_bidwrangler(db, "https://bid.dickensheet.com", "dickensheet", "Dickensheet", progress=job)
-        count = result.get("new_items", 0)
-        total_new += count
-        job.update({"message": f"Dickensheet — {count} new items found", "new_items": total_new})
+        try:
+            result = await ingest_bidwrangler(db, "https://bid.dickensheet.com", "dickensheet", "Dickensheet", progress=job)
+            count = result.get("new_items", 0)
+            total_new += count
+            job.update({"message": f"Dickensheet — {count} new items found", "new_items": total_new})
+        except Exception as e:
+            logger.error(f"Error scanning Dickensheet: {e}")
+            job.update({"message": f"Dickensheet Failed: {str(e)[:40]}"})
 
         # Step 4: Public Surplus
         job.update({"step": 4, "message": "Scanning Public Surplus..."})
-        result = await ingest_public_surplus(db, progress=job)
-        count = result.get("new_items", 0)
-        total_new += count
-        job.update({"message": f"Public Surplus — {count} new items found", "new_items": total_new})
+        try:
+            result = await ingest_public_surplus(db, progress=job)
+            count = result.get("new_items", 0)
+            total_new += count
+            job.update({"message": f"Public Surplus — {count} new items found", "new_items": total_new})
+        except Exception as e:
+            logger.error(f"Error scanning Public Surplus: {e}")
+            job.update({"message": f"Public Surplus Failed: {str(e)[:40]}"})
 
         # Done
         job.update({"message": f"Complete — {total_new} total new items", "step": 4})
@@ -288,6 +304,161 @@ async def get_store_listings(db: Session = Depends(get_db), current_user: str = 
 from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
 from ..scrapers.public_surplus import PublicSurplusScraper
 from ..scrapers.bid_wrangler import BidWranglerApiScraper
+
+@router.post("/refresh-active-bids")
+async def refresh_active_bids(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    """
+    Lightweight refresh of is_user_bidding and current_bid for existing items.
+    Uses stored credentials to check each platform without full re-ingestion.
+    """
+    results = {}
+
+    # --- Auctioneer Software platforms (Whitley, Roller) ---
+    for website_key, base_url, name in [
+        ("rmeb", "https://www.whitleyauction.com", "Whitley Auction"),
+        ("rol", "https://bid.rollerauction.com", "Roller Auction"),
+    ]:
+        cookie_setting = db.query(Setting).filter(Setting.key == f"{website_key}_cookie").first()
+        if not cookie_setting or not cookie_setting.value:
+            results[website_key] = {"status": "skipped", "reason": "no credentials"}
+            continue
+
+        scraper = AuctioneerSoftwareScraper(base_url=base_url, website_key=website_key)
+        try:
+            session_cookie = decrypt_value(cookie_setting.value)
+            if not session_cookie:
+                results[website_key] = {"status": "skipped", "reason": "invalid cookie"}
+                continue
+
+            await scraper.login(username="", session_cookie=session_cookie)
+            my_bidder_id = await scraper.fetch_my_bidder_id()
+
+            # Also check stored bidder ID
+            bidder_setting = db.query(Setting).filter(Setting.key == f"{website_key}_bidder_id").first()
+            user_bidder_ids = []
+            if bidder_setting and bidder_setting.value:
+                user_bidder_ids.append(str(bidder_setting.value))
+            if my_bidder_id and str(my_bidder_id) not in user_bidder_ids:
+                user_bidder_ids.append(str(my_bidder_id))
+
+            house = db.query(AuctionHouse).filter(AuctionHouse.website_key == website_key).first()
+            if not house:
+                results[website_key] = {"status": "skipped", "reason": "no auction house"}
+                continue
+
+            # Re-fetch lots for active auctions and update bid status
+            auctions_data = await scraper.discover_active_auctions()
+            updated = 0
+            for auction_data in auctions_data:
+                ext_id = str(auction_data.get('auction_id') or auction_data.get('id'))
+                if not ext_id or ext_id == 'None':
+                    continue
+                _, lots_data = await scraper.fetch_auction_lots(ext_id)
+                for lot in lots_data:
+                    lot_ext_id = str(lot.get('lot_id') or lot.get('id'))
+                    if not lot_ext_id or lot_ext_id == 'None':
+                        continue
+                    item = db.query(Item).filter(Item.external_id == lot_ext_id, Item.auction_house_id == house.id).first()
+                    if not item:
+                        continue
+
+                    is_bidding = False
+                    if lot.get('isHighBidder') is True:
+                        is_bidding = True
+                    else:
+                        high_bidder_id = str(lot.get('highBidderId') or lot.get('high_bidder_id', ''))
+                        if high_bidder_id in user_bidder_ids:
+                            is_bidding = True
+
+                    current_bid = float(lot.get('winning_bid_amount') or lot.get('starting_bid') or lot.get('price') or lot.get('required_bid') or 0.0)
+                    if item.is_user_bidding != is_bidding or item.current_bid != current_bid:
+                        item.is_user_bidding = is_bidding
+                        item.current_bid = current_bid
+                        updated += 1
+
+            db.commit()
+            results[website_key] = {"status": "success", "updated": updated}
+        except Exception as e:
+            logger.error(f"Error refreshing active bids for {name}: {e}")
+            results[website_key] = {"status": "error", "error": str(e)[:80]}
+        finally:
+            await scraper.close()
+
+    # --- Public Surplus ---
+    cookie_setting = db.query(Setting).filter(Setting.key == "public_surplus_cookie").first()
+    if cookie_setting and cookie_setting.value:
+        scraper = PublicSurplusScraper(zip_code="00000", radius="0")
+        try:
+            session_cookie = decrypt_value(cookie_setting.value)
+            if session_cookie:
+                await scraper.login(username="", session_cookie=session_cookie)
+                my_bid_ids = await scraper.fetch_my_bids()
+
+                house = db.query(AuctionHouse).filter(AuctionHouse.website_key == "public_surplus").first()
+                if house:
+                    # Get all existing public surplus items and update their bid status
+                    ps_items = db.query(Item).filter(Item.auction_house_id == house.id).all()
+                    updated = 0
+                    for item in ps_items:
+                        is_bidding = item.external_id in my_bid_ids
+                        if item.is_user_bidding != is_bidding:
+                            item.is_user_bidding = is_bidding
+                            updated += 1
+                    db.commit()
+                    results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bid_ids)}
+                else:
+                    results["public_surplus"] = {"status": "skipped", "reason": "no auction house"}
+            else:
+                results["public_surplus"] = {"status": "skipped", "reason": "invalid cookie"}
+        except Exception as e:
+            logger.error(f"Error refreshing active bids for Public Surplus: {e}")
+            results["public_surplus"] = {"status": "error", "error": str(e)[:80]}
+    else:
+        results["public_surplus"] = {"status": "skipped", "reason": "no credentials"}
+
+    # --- BidWrangler (Dickensheet) ---
+    bidder_setting = db.query(Setting).filter(Setting.key == "dickensheet_bidder_id").first()
+    if bidder_setting and bidder_setting.value:
+        scraper = BidWranglerApiScraper(base_url="https://bid.dickensheet.com")
+        try:
+            user_bidder_ids = [str(bidder_setting.value)]
+            house = db.query(AuctionHouse).filter(AuctionHouse.website_key == "dickensheet").first()
+            if not house:
+                results["dickensheet"] = {"status": "skipped", "reason": "no auction house"}
+            else:
+                auctions_data = await scraper.discover_active_auctions()
+                updated = 0
+                for auction_data in auctions_data:
+                    ext_id = str(auction_data.get('id', ''))
+                    if not ext_id:
+                        continue
+                    _, lots_data = await scraper.fetch_auction_lots(ext_id)
+                    for lot in lots_data:
+                        lot_ext_id = str(lot.get('id', ''))
+                        if not lot_ext_id:
+                            continue
+                        item = db.query(Item).filter(Item.external_id == lot_ext_id, Item.auction_house_id == house.id).first()
+                        if not item:
+                            continue
+
+                        high_bidder_id = str(lot.get('high_bidder_id') or lot.get('high_bidder', ''))
+                        is_bidding = high_bidder_id in user_bidder_ids if high_bidder_id else False
+                        current_bid = float(lot.get('next_bid_amount') or lot.get('current_bid') or lot.get('starting_bid') or 0.0)
+
+                        if item.is_user_bidding != is_bidding or item.current_bid != current_bid:
+                            item.is_user_bidding = is_bidding
+                            item.current_bid = current_bid
+                            updated += 1
+
+                db.commit()
+                results["dickensheet"] = {"status": "success", "updated": updated}
+        except Exception as e:
+            logger.error(f"Error refreshing active bids for Dickensheet: {e}")
+            results["dickensheet"] = {"status": "error", "error": str(e)[:80]}
+    else:
+        results["dickensheet"] = {"status": "skipped", "reason": "no credentials"}
+
+    return {"status": "success", "platforms": results}
 
 @router.post("/settings/verify-login/{website_key}")
 async def verify_login(website_key: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
