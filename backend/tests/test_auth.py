@@ -7,9 +7,14 @@ from unittest.mock import MagicMock
 # Mock DB dependency
 def override_get_db():
     mock_db = MagicMock()
+    mock_db.query.return_value.filter_by.return_value.first.return_value = None
     yield mock_db
 
-app.dependency_overrides[get_db] = override_get_db
+@pytest.fixture(autouse=True)
+def override_dependencies():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.clear()
 
 client = TestClient(app)
 

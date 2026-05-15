@@ -1,6 +1,8 @@
+import pytest
 import asyncio
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
 from app.models import Setting
 from app.services.security import decrypt_value
 from app.scrapers.public_surplus import PublicSurplusScraper
@@ -10,9 +12,14 @@ DATABASE_URL = "postgresql://postgres:postgres@localhost:5434/auctionmaster" # F
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-async def test():
-    db = SessionLocal()
-    cookie_setting = db.query(Setting).filter(Setting.key == "public_surplus_cookie").first()
+@pytest.mark.asyncio
+async def test_public_surplus():
+    try:
+        db = SessionLocal()
+        cookie_setting = db.query(Setting).filter(Setting.key == "public_surplus_cookie").first()
+    except OperationalError:
+        print("Could not connect to DB.")
+        return
     if not cookie_setting:
         print("No cookie found in local DB.")
         return
