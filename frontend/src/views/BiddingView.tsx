@@ -3,6 +3,13 @@ import './BiddingView.css';
 import { useSortableData } from '../hooks/useSortableData';
 import { ArrowUpDown, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 
+interface SampleListing {
+  url: string;
+  title: string;
+  price: number | string;
+  condition: string;
+}
+
 interface Item {
   id: number;
   title: string;
@@ -25,7 +32,7 @@ interface Item {
     median_asking_price: number;
     price_range_low: number;
     price_range_high: number;
-    sample_listings: any[];
+    sample_listings: SampleListing[];
   };
   user_bids?: {
     current_bid_amount: number;
@@ -50,7 +57,7 @@ const BiddingView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [targetMargins, setTargetMargins] = useState<Record<number, number>>({});
+  const [targetMargins, setTargetMargins] = useState<Record<number, string | number>>({});
 
   const toggleRow = (id: number) => {
     const newExpanded = new Set(expandedRows);
@@ -62,7 +69,7 @@ const BiddingView: React.FC = () => {
     setExpandedRows(newExpanded);
   };
   
-  const handleMarginChange = (id: number, val: number) => {
+  const handleMarginChange = (id: number, val: string | number) => {
     setTargetMargins(prev => ({...prev, [id]: val}));
   };
 
@@ -230,12 +237,13 @@ const BiddingView: React.FC = () => {
                                   <input 
                                     type="number" 
                                     value={targetMargins[item.id] ?? 20}
-                                    onChange={(e) => handleMarginChange(item.id, parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => handleMarginChange(item.id, e.target.value === '' ? '' : parseFloat(e.target.value))}
                                     className="bg-black/50 border border-white/20 rounded px-2 py-1 w-20 text-right text-white"
                                   />
                                 </div>
                                 {(() => {
-                                  const margin = (targetMargins[item.id] ?? 20) / 100;
+                                  const rawMargin = targetMargins[item.id];
+                                  const margin = ((typeof rawMargin === 'number' ? rawMargin : parseFloat(rawMargin as string)) || 20) / 100;
                                   const avgPrice = item.valuation_detail?.avg_asking_price || 0;
                                   const shipping = item.shipping_cost_est || 0;
                                   const maxBid = (avgPrice * (1 - 0.15) * (1 - margin)) - shipping;
@@ -280,7 +288,7 @@ const BiddingView: React.FC = () => {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {item.valuation_detail.sample_listings.map((listing: any, i: number) => (
+                                      {item.valuation_detail.sample_listings.map((listing: SampleListing, i: number) => (
                                         <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                           <td className="p-2 truncate max-w-[300px]" title={listing.title}>{listing.title}</td>
                                           <td className="p-2 font-mono text-green-300">${listing.price}</td>
