@@ -32,6 +32,14 @@ from ..services.security import encrypt_value, decrypt_value
 def is_sensitive_key(key: str) -> bool:
     return key.endswith("_password") or key.endswith("_cookie") or key.endswith("_secret") or key.endswith("_api_key") or "secret" in key or "token" in key or "key" in key
 
+def safe_float(val, default=0.0):
+    if val is None or val == 'None' or val == '':
+        return float(default)
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return float(default)
+
 @router.get("/settings")
 async def get_settings(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     settings = db.query(Setting).all()
@@ -362,26 +370,29 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                     if not item:
                         continue
 
-                    is_bidding = False
+                    is_winning = False
                     if lot.get('isHighBidder') is True:
-                        is_bidding = True
+                        is_winning = True
                     else:
                         high_bidder_id = str(lot.get('highBidderId') or lot.get('high_bidder_id', ''))
                         if high_bidder_id in user_bidder_ids:
-                            is_bidding = True
+                            is_winning = True
 
-                    current_bid = float(lot.get('winning_bid_amount') or lot.get('starting_bid') or lot.get('price') or lot.get('required_bid') or 0.0)
-                    if item.is_user_bidding != is_bidding or item.current_bid != current_bid:
-                        item.is_user_bidding = is_bidding
+                    current_bid = safe_float(lot.get('winning_bid_amount') or lot.get('starting_bid') or lot.get('price') or lot.get('required_bid'), default=0.0)
+                    
+                    bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                    has_bid = is_winning or (bid_activity is not None)
+
+                    if item.is_user_bidding != has_bid or item.current_bid != current_bid:
+                        item.is_user_bidding = has_bid
                         item.current_bid = current_bid
                         updated += 1
                         
-                    if is_bidding:
+                    if has_bid:
                         # Try to extract proxy and user bid amounts (Whitley/Roller format)
-                        proxy = float(lot.get('my_max_proxy') or lot.get('my_max_bid') or current_bid)
-                        status = "winning" if (lot.get('isHighBidder') is True or str(lot.get('highBidderId')) in user_bidder_ids) else "outbid"
+                        proxy = safe_float(lot.get('my_max_proxy') or lot.get('my_max_bid'), default=current_bid)
+                        status = "winning" if is_winning else "outbid"
                         
-                        bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
                         if not bid_activity:
                             bid_activity = UserBidActivity(item_id=item.id)
                             db.add(bid_activity)
@@ -416,20 +427,22 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                         ps_items = db.query(Item).filter(Item.auction_house_id == house.id).all()
                         updated = 0
                         for item in ps_items:
-                            is_bidding = item.external_id in my_bid_ids
-                            if item.is_user_bidding != is_bidding:
-                                item.is_user_bidding = is_bidding
+                            is_winning = item.external_id in my_bid_ids
+                            bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                            has_bid = is_winning or (bid_activity is not None)
+                            
+                            if item.is_user_bidding != has_bid:
+                                item.is_user_bidding = has_bid
                                 updated += 1
                             
-                            if is_bidding:
-                                bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                            if has_bid:
                                 if not bid_activity:
                                     bid_activity = UserBidActivity(item_id=item.id)
                                     db.add(bid_activity)
                                 bid_activity.current_bid_amount = item.current_bid
                                 bid_activity.user_proxy_bid = item.current_bid # Fallback since API lacks it
                                 bid_activity.user_bid_amount = item.current_bid
-                                bid_activity.user_bid_status = "winning" # Default optimistic assumption
+                                bid_activity.user_bid_status = "winning" if is_winning else "outbid"
                         db.commit()
                         results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bid_ids)}
                     else:
@@ -471,23 +484,28 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                             continue
 
                         high_bidder_id = str(lot.get('high_bidder_id') or lot.get('high_bidder', ''))
-                        is_bidding = high_bidder_id in user_bidder_ids if high_bidder_id else False
-                        current_bid = float(lot.get('next_bid_amount') or lot.get('current_bid') or lot.get('starting_bid') or 0.0)
+                        is_winning = high_bidder_id in user_bidder_ids if high_bidder_id else False
+                        current_bid = safe_float(lot.get('next_bid_amount') or lot.get('current_bid') or lot.get('starting_bid'), default=0.0)
 
-                        if item.is_user_bidding != is_bidding or item.current_bid != current_bid:
-                            item.is_user_bidding = is_bidding
+                        bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                        has_bid = is_winning or (bid_activity is not None)
+
+                        if item.is_user_bidding != has_bid or item.current_bid != current_bid:
+                            item.is_user_bidding = has_bid
                             item.current_bid = current_bid
                             updated += 1
 
-                        if is_bidding:
-                            bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                        if has_bid:
                             if not bid_activity:
                                 bid_activity = UserBidActivity(item_id=item.id)
                                 db.add(bid_activity)
+                                
+                            proxy = safe_float(lot.get('max_bid'), default=current_bid)
+                            
                             bid_activity.current_bid_amount = current_bid
-                            bid_activity.user_proxy_bid = float(lot.get('max_bid') or current_bid)
-                            bid_activity.user_bid_amount = float(lot.get('max_bid') or current_bid)
-                            bid_activity.user_bid_status = "winning" if is_bidding else "outbid"
+                            bid_activity.user_proxy_bid = proxy
+                            bid_activity.user_bid_amount = proxy
+                            bid_activity.user_bid_status = "winning" if is_winning else "outbid"
 
                 db.commit()
                 results["dickensheet"] = {"status": "success", "updated": updated}
