@@ -167,14 +167,15 @@ class UserBidActivity(Base):
 class ValuationDetail(Base):
     __tablename__ = "valuation_details"
     id = Column(Integer, primary_key=True, index=True)
-    sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"), nullable=False, unique=True)
+    sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id", ondelete="CASCADE"), nullable=False, unique=True)
     sample_listings = Column(JSON, default=list)
     avg_asking_price = Column(Float)
     median_asking_price = Column(Float)
     price_range_low = Column(Float)
     price_range_high = Column(Float)
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
     
-    sample_cache = relationship("EbaySampleCache")
+    sample_cache = relationship("EbaySampleCache", back_populates="valuation_detail")
 
 
 from sqlalchemy import UniqueConstraint

@@ -43,7 +43,8 @@ def upgrade() -> None:
     sa.Column('median_asking_price', sa.Float(), nullable=True),
     sa.Column('price_range_low', sa.Float(), nullable=True),
     sa.Column('price_range_high', sa.Float(), nullable=True),
-    sa.ForeignKeyConstraint(['sample_cache_id'], ['ebay_sample_cache.id'], ),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['sample_cache_id'], ['ebay_sample_cache.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('sample_cache_id')
     )
