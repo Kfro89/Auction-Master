@@ -12,13 +12,38 @@ interface Item {
   status: string;
   url: string;
   image_url: string;
+  images?: string[];
   is_user_bidding: boolean;
+  shipping_cost_est?: number;
   valuation?: {
     est_market_value: number;
     max_bid_for_target_roi: number;
     target_roi_pct: number;
   };
+  valuation_detail?: {
+    avg_asking_price: number;
+    median_asking_price: number;
+    price_range_low: number;
+    price_range_high: number;
+    sample_listings: any[];
+  };
+  user_bids?: {
+    current_bid_amount: number;
+    user_bid_amount: number;
+    user_proxy_bid: number;
+    user_bid_status: string;
+  };
 }
+
+const getRowClass = (status?: string) => {
+  switch(status) {
+    case 'winning': return 'bg-green-900/20 border-l-4 border-green-500';
+    case 'outbid': return 'bg-red-900/20 border-l-4 border-red-500';
+    case 'reserve_not_met': return 'bg-yellow-900/20 border-l-4 border-yellow-500';
+    case 'outbid_near': return 'bg-orange-900/20 border-l-4 border-orange-500';
+    default: return '';
+  }
+};
 
 const BiddingView: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
@@ -63,29 +88,44 @@ const BiddingView: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const endingToday = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const { totalCurrentBids, totalUserBids, totalMaxExposure } = useMemo(() => {
+    let tCurrent = 0;
+    let tUser = 0;
+    let tExposure = 0;
 
-    return items.filter(item => {
-      const endTime = new Date(item.end_time);
-      return endTime >= today && endTime < tomorrow;
+    items.forEach(item => {
+      if (item.user_bids) {
+        tCurrent += item.user_bids.current_bid_amount || 0;
+        tUser += item.user_bids.user_bid_amount || 0;
+        tExposure += item.user_bids.user_proxy_bid || 0;
+      }
     });
+
+    return {
+      totalCurrentBids: tCurrent,
+      totalUserBids: tUser,
+      totalMaxExposure: tExposure
+    };
   }, [items]);
 
   const itemsWithComputedRoi = useMemo(() => {
     return items.map(item => {
       let roi = null;
+      let landedCost = 0;
+      
+      const effectiveBid = item.user_bids?.user_proxy_bid || item.current_bid;
+      const shippingCost = item.shipping_cost_est || 0;
+      const buyerPremium = effectiveBid * 0.15;
+      landedCost = effectiveBid + shippingCost + buyerPremium;
+
       if (item.valuation) {
-        if (item.current_bid > 0) {
-          roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
+        if (landedCost > 0) {
+          roi = ((item.valuation.est_market_value - landedCost) / landedCost) * 100;
         } else {
           roi = Infinity;
         }
       }
-      return { ...item, computedRoi: roi };
+      return { ...item, computedRoi: roi, landedCost };
     });
   }, [items]);
 
@@ -104,12 +144,16 @@ const BiddingView: React.FC = () => {
     <div className="bidding-view">
       <header className="summary-section">
         <div className="summary-card glass">
-          <h2>Ending Today</h2>
-          <div className="summary-stat">{endingToday.length} Items</div>
+          <h2>Max Exposure</h2>
+          <div className="summary-stat">${totalMaxExposure.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         <div className="summary-card glass">
-          <h2>Total Active Bids</h2>
-          <div className="summary-stat">{items.length}</div>
+          <h2>Total Current Bids</h2>
+          <div className="summary-stat">${totalCurrentBids.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+        <div className="summary-card glass">
+          <h2>Your Active Bids</h2>
+          <div className="summary-stat">${totalUserBids.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         <button
           className="refresh-bids-btn"
@@ -130,20 +174,24 @@ const BiddingView: React.FC = () => {
                 <th>Img</th>
                 <th onClick={() => requestSort('title')} className="sortable">Title {renderSortIcon('title')}</th>
                 <th onClick={() => requestSort('lot_number')} className="sortable">Lot {renderSortIcon('lot_number')}</th>
-                <th onClick={() => requestSort('current_bid')} className="sortable">Your Bid {renderSortIcon('current_bid')}</th>
+                <th onClick={() => requestSort('user_bids.user_bid_amount')} className="sortable">Your Bid {renderSortIcon('user_bids.user_bid_amount')}</th>
+                <th onClick={() => requestSort('user_bids.user_proxy_bid')} className="sortable">Top Proxy {renderSortIcon('user_bids.user_proxy_bid')}</th>
                 <th onClick={() => requestSort('valuation.max_bid_for_target_roi')} className="sortable">Max Bid {renderSortIcon('valuation.max_bid_for_target_roi')}</th>
+                <th onClick={() => requestSort('landedCost')} className="sortable">Landed Cost {renderSortIcon('landedCost')}</th>
                 <th onClick={() => requestSort('computedRoi')} className="sortable">ROI {renderSortIcon('computedRoi')}</th>
                 <th onClick={() => requestSort('end_time')} className="sortable">Ends {renderSortIcon('end_time')}</th>
               </tr>
             </thead>
             <tbody>
               {sortedItems.map(item => (
-                <tr key={item.id} className="bidding-row">
+                <tr key={item.id} className={`bidding-row ${getRowClass(item.user_bids?.user_bid_status)}`}>
                   <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
                   <td className="title-cell" title={item.title}>{item.title}</td>
                   <td className="mono">{item.lot_number}</td>
-                  <td className="bid-cell">${item.current_bid}</td>
+                  <td className="bid-cell">${item.user_bids?.user_bid_amount?.toFixed(2) || '--'}</td>
+                  <td>${item.user_bids?.user_proxy_bid?.toFixed(2) || '--'}</td>
                   <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
+                  <td>${item.landedCost?.toFixed(2) || '--'}</td>
                   <td>{item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}</td>
                   <td className="timer-text">{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                 </tr>
