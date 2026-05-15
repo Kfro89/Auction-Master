@@ -1,7 +1,7 @@
 """Add Bidding and Valuation tables
 
 Revision ID: 588f98419d5b
-Revises: d5cab93897f2
+Revises: fccabdea2a06
 Create Date: 2026-05-15 14:31:05.943296
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '588f98419d5b'
-down_revision: Union[str, Sequence[str], None] = 'd5cab93897f2'
+down_revision: Union[str, Sequence[str], None] = 'fccabdea2a06'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -122,7 +122,7 @@ class EbaySampleCache(Base):
 class Valuation(Base):
     __tablename__ = "valuations"
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True, unique=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
     sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"))
     est_market_value = Column(Float)
     market_adjustment_factor_applied = Column(Float)
