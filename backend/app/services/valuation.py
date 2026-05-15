@@ -165,7 +165,7 @@ async def _persist_valuation(db: Session, item: Item, val_data: dict, used_query
         fetched_at=datetime.datetime.utcnow()
     )
     db.add(sample_cache)
-    db.commit()
+    db.flush()
     db.refresh(sample_cache)
     
     raw_listings = val_data.get("raw_listings", [])
@@ -185,7 +185,7 @@ async def _persist_valuation(db: Session, item: Item, val_data: dict, used_query
             price_range_high=price_range_high
         )
         db.add(val_detail)
-        db.commit()
+        db.flush()
 
     # Check if valuation exists
     valuation = db.query(Valuation).filter(Valuation.item_id == item.id).first()
