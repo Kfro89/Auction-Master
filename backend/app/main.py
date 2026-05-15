@@ -11,7 +11,7 @@ from .auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 # For now, we'll let Alembic handle migrations, but ensure tables are created
 # Base.metadata.create_all(bind=engine)
 
-from .routers import admin, items, inventory
+from .routers import admin, items, inventory, credentials
 from .services.valuation_worker import process_pending_valuations
 from .services.ingestion import ingest_auctioneer_software, ingest_public_surplus, ingest_bidwrangler
 from .database import SessionLocal
@@ -40,11 +40,59 @@ def prune_watchlist():
     finally:
         db.close()
 
+def prune_closed_auctions():
+    import logging
+    logger = logging.getLogger(__name__)
+    db: Session = SessionLocal()
+    try:
+        # Define threshold for expired auctions/items (e.g., 24 hours ago)
+        threshold = datetime.now(pytz.utc) - timedelta(hours=24)
+        
+        # We delete items where end_time has passed and user has NOT bid on them
+        # (and they are not watched, or we let watched items expire via prune_watchlist later)
+        # Wait, if they are watched, should we delete? The user only specified retaining if they bid.
+        # But we'll preserve watched as well just so watchlist doesn't break, and they get deleted 
+        # when prune_watchlist removes the flag.
+        
+        items_to_delete = db.query(models.Item).filter(
+            models.Item.end_time < threshold,
+            models.Item.is_user_bidding == False,
+            models.Item.is_watched == False
+        ).all()
+        
+        deleted_items_count = len(items_to_delete)
+        for item in items_to_delete:
+            db.delete(item)
+            
+        db.commit()
+        
+        # Clean up empty auctions that have expired
+        # (An auction might have items kept because user bid on them, so the auction stays)
+        empty_auctions = db.query(models.Auction).filter(
+            models.Auction.end_time < threshold,
+            ~models.Auction.items.any()
+        ).all()
+        
+        for auction in empty_auctions:
+            db.delete(auction)
+            
+        db.commit()
+        
+        if deleted_items_count > 0 or empty_auctions:
+            logger.info(f"Pruned {deleted_items_count} closed items and {len(empty_auctions)} empty auctions.")
+            
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error pruning closed auctions: {e}")
+    finally:
+        db.close()
+
 app = FastAPI(title="Auction Arbitrage API")
 
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(items.router, prefix="/api/items", tags=["items"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["inventory"])
+app.include_router(credentials.router, prefix="/api/credentials", tags=["credentials"])
 
 @app.post("/api/auth/login")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -103,6 +151,7 @@ async def start_scheduler():
 
     scheduler.add_job(sweep_and_valuate_job, "interval", minutes=60)
     scheduler.add_job(prune_watchlist, 'cron', hour=0, minute=0) # Run daily at midnight UTC
+    scheduler.add_job(prune_closed_auctions, 'cron', hour=1, minute=0) # Run daily at 1 AM UTC
     scheduler.start()
     print("Background valuation scheduler started.")
 
@@ -116,6 +165,47 @@ def health_check(db: Session = Depends(get_db)):
         db_status = str(e)
 
     return {"status": "ok", "database": db_status}
+
+@app.get("/debug/llm-connectivity")
+async def debug_llm_connectivity():
+    """TEMPORARY diagnostic endpoint - remove after debugging."""
+    import httpx
+    llm_base_url = os.getenv("LLM_BASE_URL", "NOT_SET (defaulting to http://localhost:1234/v1)")
+    effective_url = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
+    
+    result = {
+        "LLM_BASE_URL_env": llm_base_url,
+        "effective_url": effective_url,
+        "models_endpoint": None,
+        "completion_test": None,
+        "error": None,
+    }
+    
+    # Test 1: Can we reach /v1/models?
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{effective_url}/models")
+            result["models_endpoint"] = {"status": resp.status_code, "body": resp.json()}
+    except Exception as e:
+        result["models_endpoint"] = {"error": str(e)}
+    
+    # Test 2: Can we do a simple completion?
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{effective_url}/chat/completions",
+                json={
+                    "model": "google/gemma-4-e4b",
+                    "messages": [{"role": "user", "content": "Say OK"}],
+                    "temperature": 0.1,
+                    "max_tokens": 5
+                }
+            )
+            result["completion_test"] = {"status": resp.status_code, "body": resp.json()}
+    except Exception as e:
+        result["completion_test"] = {"error": str(e)}
+    
+    return result
 
 @app.get("/")
 def read_root():
