@@ -118,6 +118,7 @@ class EbaySampleCache(Base):
     confidence_score = Column(Float)
     fetched_at = Column(DateTime(timezone=True))
     ttl = Column(DateTime(timezone=True))
+    valuation_detail = relationship("ValuationDetail", back_populates="sample_cache", uselist=False, cascade="all, delete-orphan")
 
 class Valuation(Base):
     __tablename__ = "valuations"

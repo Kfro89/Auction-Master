@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from pydantic import BaseModel
 from ..database import get_db
-from ..models import Item, Valuation
+from ..models import Item, Valuation, EbaySampleCache
 from ..auth import get_current_user
 
 router = APIRouter()
@@ -48,7 +48,26 @@ def serialize_item(item: Item) -> dict:
             val_dict["sample_size"] = item.valuation.sample_cache.sample_size
             val_dict["mean"] = item.valuation.sample_cache.mean
             val_dict["trimmed_median"] = item.valuation.sample_cache.trimmed_median
+            
+            if getattr(item.valuation.sample_cache, "valuation_detail", None):
+                val_detail = item.valuation.sample_cache.valuation_detail
+                val_dict["valuation_detail"] = {
+                    "avg_asking_price": val_detail.avg_asking_price,
+                    "median_asking_price": val_detail.median_asking_price,
+                    "price_range_low": val_detail.price_range_low,
+                    "price_range_high": val_detail.price_range_high,
+                    "sample_listings": val_detail.sample_listings,
+                }
         item_dict["valuation"] = val_dict
+        
+    if getattr(item, "user_bids", None):
+        item_dict["user_bid_activity"] = {
+            "current_bid_amount": item.user_bids.current_bid_amount,
+            "user_bid_amount": item.user_bids.user_bid_amount,
+            "user_proxy_bid": item.user_bids.user_proxy_bid,
+            "user_bid_status": item.user_bids.user_bid_status,
+            "updated_at": item.user_bids.updated_at
+        }
         
     return item_dict
 
@@ -57,8 +76,9 @@ async def list_items(db: Session = Depends(get_db), current_user: str = Depends(
     from sqlalchemy.sql import func
     # Fetch items with their valuations and auction house, filtering out expired ones
     items = db.query(Item).options(
-        joinedload(Item.valuation).joinedload(Valuation.sample_cache), 
-        joinedload(Item.auction_house)
+        joinedload(Item.valuation).joinedload(Valuation.sample_cache).joinedload(EbaySampleCache.valuation_detail), 
+        joinedload(Item.auction_house),
+        joinedload(Item.user_bids)
     ).filter(
         (Item.end_time >= func.now()) | (Item.end_time.is_(None))
     ).order_by(Item.end_time.asc()).all()
@@ -86,7 +106,11 @@ async def get_watchlist(
     db: Session = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    items = db.query(Item).options(joinedload(Item.valuation).joinedload(Valuation.sample_cache), joinedload(Item.auction_house)).filter(Item.is_watched.is_(True)).order_by(Item.end_time.asc()).all()
+    items = db.query(Item).options(
+        joinedload(Item.valuation).joinedload(Valuation.sample_cache).joinedload(EbaySampleCache.valuation_detail),
+        joinedload(Item.auction_house),
+        joinedload(Item.user_bids)
+    ).filter(Item.is_watched.is_(True)).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]
 
 from pydantic import BaseModel

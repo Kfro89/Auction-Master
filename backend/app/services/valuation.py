@@ -6,7 +6,7 @@ import re
 import httpx
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from ..models import Item, AuctionHouse, EbaySampleCache, Valuation
+from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, ValuationDetail
 from .ebay_auth import EbayAuthClient
 from .ebay_browse import EbayBrowseClient
 from .llm import extract_product_name, generate_valuation_data
@@ -167,6 +167,25 @@ async def _persist_valuation(db: Session, item: Item, val_data: dict, used_query
     db.add(sample_cache)
     db.commit()
     db.refresh(sample_cache)
+    
+    raw_listings = val_data.get("raw_listings", [])
+    if raw_listings:
+        prices = [listing["price"] for listing in raw_listings]
+        avg_asking_price = sum(prices) / len(prices) if prices else 0
+        median_asking_price = statistics.median(prices) if prices else 0
+        price_range_low = min(prices) if prices else 0
+        price_range_high = max(prices) if prices else 0
+
+        val_detail = ValuationDetail(
+            sample_cache_id=sample_cache.id,
+            sample_listings=raw_listings,
+            avg_asking_price=avg_asking_price,
+            median_asking_price=median_asking_price,
+            price_range_low=price_range_low,
+            price_range_high=price_range_high
+        )
+        db.add(val_detail)
+        db.commit()
 
     # Check if valuation exists
     valuation = db.query(Valuation).filter(Valuation.item_id == item.id).first()
@@ -302,24 +321,33 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
             continue
             
         prices = []
+        raw_listings = []
         for summary in item_summaries:
             price_obj = summary.get("price", {})
             val = price_obj.get("value")
             if val:
                 try:
-                    prices.append(float(val))
+                    price_float = float(val)
+                    prices.append(price_float)
+                    if len(raw_listings) < 20:
+                        raw_listings.append({
+                            "url": summary.get("itemWebUrl", ""),
+                            "title": summary.get("title", ""),
+                            "price": price_float,
+                            "condition": summary.get("condition", {}).get("conditionDisplayName", "")
+                        })
                 except ValueError:
                     pass
-                    
+
         if not prices:
             continue
-            
+
         temp_val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium, is_vehicle=bool(is_vehicle))
         if temp_val_data:
             val_data = temp_val_data
+            val_data["raw_listings"] = raw_listings
             used_query = query
             break
-
     if not val_data:
         return None
 
