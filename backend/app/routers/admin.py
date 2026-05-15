@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db, SessionLocal
 from ..services.ingestion import ingest_auctioneer_software, ingest_public_surplus, ingest_bidwrangler
-from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, Setting
+from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, Setting, UserBidActivity
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.ebay_store import EbayStoreClient
@@ -375,6 +375,21 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                         item.is_user_bidding = is_bidding
                         item.current_bid = current_bid
                         updated += 1
+                        
+                    if is_bidding:
+                        # Try to extract proxy and user bid amounts (Whitley/Roller format)
+                        proxy = float(lot.get('my_max_proxy') or lot.get('my_max_bid') or current_bid)
+                        status = "winning" if (lot.get('isHighBidder') is True or str(lot.get('highBidderId')) in user_bidder_ids) else "outbid"
+                        
+                        bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                        if not bid_activity:
+                            bid_activity = UserBidActivity(item_id=item.id)
+                            db.add(bid_activity)
+                        
+                        bid_activity.current_bid_amount = current_bid
+                        bid_activity.user_proxy_bid = proxy
+                        bid_activity.user_bid_amount = proxy # Or actual if available separately
+                        bid_activity.user_bid_status = status
 
             db.commit()
             results[website_key] = {"status": "success", "updated": updated}
@@ -391,25 +406,39 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
         try:
             session_cookie = decrypt_value(cookie_setting.value)
             if session_cookie:
-                await scraper.login(username="", session_cookie=session_cookie)
-                my_bid_ids = await scraper.fetch_my_bids()
-
-                house = db.query(AuctionHouse).filter(AuctionHouse.website_key == "public_surplus").first()
-                if house:
-                    # Get all existing public surplus items and update their bid status
-                    ps_items = db.query(Item).filter(Item.auction_house_id == house.id).all()
-                    updated = 0
-                    for item in ps_items:
-                        is_bidding = item.external_id in my_bid_ids
-                        if item.is_user_bidding != is_bidding:
-                            item.is_user_bidding = is_bidding
-                            updated += 1
-                    db.commit()
-                    results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bid_ids)}
+                login_ok = await scraper.login(username="", session_cookie=session_cookie)
+                if not login_ok:
+                    results["public_surplus"] = {"status": "error", "error": "Session cookie expired or invalid. Please update it in Settings."}
                 else:
-                    results["public_surplus"] = {"status": "skipped", "reason": "no auction house"}
+                    my_bid_ids = await scraper.fetch_my_bids()
+                    house = db.query(AuctionHouse).filter(AuctionHouse.website_key == "public_surplus").first()
+                    if house:
+                        ps_items = db.query(Item).filter(Item.auction_house_id == house.id).all()
+                        updated = 0
+                        for item in ps_items:
+                            is_bidding = item.external_id in my_bid_ids
+                            if item.is_user_bidding != is_bidding:
+                                item.is_user_bidding = is_bidding
+                                updated += 1
+                            
+                            if is_bidding:
+                                bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                                if not bid_activity:
+                                    bid_activity = UserBidActivity(item_id=item.id)
+                                    db.add(bid_activity)
+                                bid_activity.current_bid_amount = item.current_bid
+                                bid_activity.user_proxy_bid = item.current_bid # Fallback since API lacks it
+                                bid_activity.user_bid_amount = item.current_bid
+                                bid_activity.user_bid_status = "winning" # Default optimistic assumption
+                        db.commit()
+                        results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bid_ids)}
+                    else:
+                        results["public_surplus"] = {"status": "skipped", "reason": "no auction house"}
             else:
                 results["public_surplus"] = {"status": "skipped", "reason": "invalid cookie"}
+        except PermissionError as e:
+            logger.warning(f"Public Surplus auth failed during bid refresh: {e}")
+            results["public_surplus"] = {"status": "error", "error": "Session cookie expired or invalid. Please update it in Settings."}
         except Exception as e:
             logger.error(f"Error refreshing active bids for Public Surplus: {e}")
             results["public_surplus"] = {"status": "error", "error": str(e)[:80]}
@@ -449,6 +478,16 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                             item.is_user_bidding = is_bidding
                             item.current_bid = current_bid
                             updated += 1
+
+                        if is_bidding:
+                            bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                            if not bid_activity:
+                                bid_activity = UserBidActivity(item_id=item.id)
+                                db.add(bid_activity)
+                            bid_activity.current_bid_amount = current_bid
+                            bid_activity.user_proxy_bid = float(lot.get('max_bid') or current_bid)
+                            bid_activity.user_bid_amount = float(lot.get('max_bid') or current_bid)
+                            bid_activity.user_bid_status = "winning" if is_bidding else "outbid"
 
                 db.commit()
                 results["dickensheet"] = {"status": "success", "updated": updated}
