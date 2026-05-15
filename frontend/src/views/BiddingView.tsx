@@ -113,7 +113,7 @@ const BiddingView: React.FC = () => {
       let roi = null;
       let landedCost = 0;
       
-      const effectiveBid = item.user_bids?.user_proxy_bid || item.current_bid;
+      const effectiveBid = item.user_bids?.user_proxy_bid ?? item.current_bid;
       const shippingCost = item.shipping_cost_est || 0;
       const buyerPremium = effectiveBid * 0.15;
       landedCost = effectiveBid + shippingCost + buyerPremium;
@@ -188,10 +188,10 @@ const BiddingView: React.FC = () => {
                   <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
                   <td className="title-cell" title={item.title}>{item.title}</td>
                   <td className="mono">{item.lot_number}</td>
-                  <td className="bid-cell">${item.user_bids?.user_bid_amount?.toFixed(2) || '--'}</td>
-                  <td>${item.user_bids?.user_proxy_bid?.toFixed(2) || '--'}</td>
+                  <td className="bid-cell">{item.user_bids?.user_bid_amount !== undefined ? `$${item.user_bids.user_bid_amount.toFixed(2)}` : '--'}</td>
+                  <td>{item.user_bids?.user_proxy_bid !== undefined ? `$${item.user_bids.user_proxy_bid.toFixed(2)}` : '--'}</td>
                   <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                  <td>${item.landedCost?.toFixed(2) || '--'}</td>
+                  <td>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
                   <td>{item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}</td>
                   <td className="timer-text">{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                 </tr>
