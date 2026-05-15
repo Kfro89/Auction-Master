@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './BiddingView.css';
 import { useSortableData } from '../hooks/useSortableData';
-import { ArrowUpDown, RefreshCw } from 'lucide-react';
+import { ArrowUpDown, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface Item {
   id: number;
@@ -49,6 +49,22 @@ const BiddingView: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [targetMargins, setTargetMargins] = useState<Record<number, number>>({});
+
+  const toggleRow = (id: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
+  };
+  
+  const handleMarginChange = (id: number, val: number) => {
+    setTargetMargins(prev => ({...prev, [id]: val}));
+  };
 
   const fetchItems = async () => {
     try {
@@ -171,6 +187,7 @@ const BiddingView: React.FC = () => {
           <table className="dense-grid">
             <thead>
               <tr>
+                <th className="w-8"></th>
                 <th>Img</th>
                 <th onClick={() => requestSort('title')} className="sortable">Title {renderSortIcon('title')}</th>
                 <th onClick={() => requestSort('lot_number')} className="sortable">Lot {renderSortIcon('lot_number')}</th>
@@ -183,19 +200,114 @@ const BiddingView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map(item => (
-                <tr key={item.id} className={`bidding-row ${getRowClass(item.user_bids?.user_bid_status)}`}>
-                  <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
-                  <td className="title-cell" title={item.title}>{item.title}</td>
-                  <td className="mono">{item.lot_number}</td>
-                  <td className="bid-cell">{item.user_bids?.user_bid_amount !== undefined ? `$${item.user_bids.user_bid_amount.toFixed(2)}` : '--'}</td>
-                  <td>{item.user_bids?.user_proxy_bid !== undefined ? `$${item.user_bids.user_proxy_bid.toFixed(2)}` : '--'}</td>
-                  <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                  <td>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
-                  <td>{item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}</td>
-                  <td className="timer-text">{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                </tr>
-              ))}
+              {sortedItems.map(item => {
+                const isExpanded = expandedRows.has(item.id);
+                return (
+                  <React.Fragment key={item.id}>
+                    <tr className={`bidding-row ${getRowClass(item.user_bids?.user_bid_status)}`}>
+                      <td onClick={() => toggleRow(item.id)} className="cursor-pointer text-center" style={{ width: '40px' }}>
+                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </td>
+                      <td><img src={item.image_url || '/placeholder.png'} className="grid-thumb" alt="" /></td>
+                      <td className="title-cell" title={item.title}>{item.title}</td>
+                      <td className="mono">{item.lot_number}</td>
+                      <td className="bid-cell">{item.user_bids?.user_bid_amount !== undefined ? `$${item.user_bids.user_bid_amount.toFixed(2)}` : '--'}</td>
+                      <td>{item.user_bids?.user_proxy_bid !== undefined ? `$${item.user_bids.user_proxy_bid.toFixed(2)}` : '--'}</td>
+                      <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
+                      <td>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
+                      <td>{item.computedRoi !== null ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`) : '--'}</td>
+                      <td className="timer-text">{new Date(item.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="expanded-row-container bg-black/40">
+                        <td colSpan={10} className="p-4">
+                          <div className="flex gap-6">
+                            {item.valuation_detail && (
+                              <div className="margin-calculator bg-white/5 p-4 rounded-lg border border-white/10 w-64 flex-shrink-0">
+                                <h3 className="font-bold mb-3 text-white">Margin Calculator</h3>
+                                <div className="flex items-center justify-between mb-3">
+                                  <label className="text-sm text-gray-300">Target Margin (%):</label>
+                                  <input 
+                                    type="number" 
+                                    value={targetMargins[item.id] ?? 20}
+                                    onChange={(e) => handleMarginChange(item.id, parseFloat(e.target.value) || 0)}
+                                    className="bg-black/50 border border-white/20 rounded px-2 py-1 w-20 text-right text-white"
+                                  />
+                                </div>
+                                {(() => {
+                                  const margin = (targetMargins[item.id] ?? 20) / 100;
+                                  const avgPrice = item.valuation_detail?.avg_asking_price || 0;
+                                  const shipping = item.shipping_cost_est || 0;
+                                  const maxBid = (avgPrice * (1 - 0.15) * (1 - margin)) - shipping;
+                                  
+                                  const listingsCount = item.valuation_detail?.sample_listings?.length || 0;
+                                  let saturationText = 'Moderate Volume';
+                                  let badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+                                  if (listingsCount > 15) {
+                                    saturationText = 'High Volume / Saturated';
+                                    badgeColor = 'bg-red-500/20 text-red-300 border-red-500/50';
+                                  } else if (listingsCount < 5) {
+                                    saturationText = 'Scarce / Low Volume';
+                                    badgeColor = 'bg-green-500/20 text-green-300 border-green-500/50';
+                                  }
+
+                                  return (
+                                    <>
+                                      <div className="mb-3 pt-3 border-t border-white/10">
+                                        <div className="text-sm text-gray-300 mb-1">Max Recommended Bid</div>
+                                        <div className="text-xl text-green-400 font-mono">${Math.max(0, maxBid).toFixed(2)}</div>
+                                      </div>
+                                      <div className={`inline-block px-2 py-1 text-xs rounded border ${badgeColor}`}>
+                                        {saturationText} ({listingsCount})
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
+
+                            <div className="valuation-table flex-1">
+                              <h3 className="font-bold mb-3 text-white">Sample Listings (Valuation)</h3>
+                              {item.valuation_detail?.sample_listings && item.valuation_detail.sample_listings.length > 0 ? (
+                                <div className="max-h-60 overflow-y-auto rounded border border-white/10">
+                                  <table className="w-full text-sm text-left border-collapse">
+                                    <thead className="bg-white/10 sticky top-0">
+                                      <tr>
+                                        <th className="p-2 border-b border-white/10">Title</th>
+                                        <th className="p-2 border-b border-white/10">Price</th>
+                                        <th className="p-2 border-b border-white/10">Condition</th>
+                                        <th className="p-2 border-b border-white/10 text-center">Link</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {item.valuation_detail.sample_listings.map((listing: any, i: number) => (
+                                        <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                          <td className="p-2 truncate max-w-[300px]" title={listing.title}>{listing.title}</td>
+                                          <td className="p-2 font-mono text-green-300">${listing.price}</td>
+                                          <td className="p-2 text-gray-300">{listing.condition}</td>
+                                          <td className="p-2 text-center">
+                                            <a href={listing.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
+                                              View
+                                            </a>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <div className="text-gray-400 italic p-4 bg-white/5 rounded border border-white/10">
+                                  No sample listings available.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
