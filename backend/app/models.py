@@ -83,6 +83,10 @@ class Item(Base):
     valuation = relationship("Valuation", back_populates="item", uselist=False, cascade="all, delete-orphan")
     sample_caches = relationship("EbaySampleCache", cascade="all, delete-orphan")
     
+    images = Column(JSON, default=list)
+    shipping_cost_est = Column(Float, default=0.0)
+    user_bids = relationship("UserBidActivity", back_populates="item", uselist=False, cascade="all, delete-orphan")
+    
     is_user_bidding = Column(Boolean, default=False)
     is_watched = Column(Boolean, default=False, server_default='false')
 
@@ -118,7 +122,7 @@ class EbaySampleCache(Base):
 class Valuation(Base):
     __tablename__ = "valuations"
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True, unique=True)
     sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"))
     est_market_value = Column(Float)
     market_adjustment_factor_applied = Column(Float)
@@ -144,6 +148,33 @@ class InventoryItem(Base):
     images = Column(JSON, default=list)
     status = Column(String, default='staged') # staged, listed, sold
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
+
+class UserBidActivity(Base):
+    __tablename__ = "user_bid_activity"
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, unique=True)
+    user_id = Column(Integer, default=1)
+    current_bid_amount = Column(Float, default=0.0)
+    user_bid_amount = Column(Float, default=0.0)
+    user_proxy_bid = Column(Float, default=0.0)
+    user_bid_status = Column(String) # winning, outbid, reserve_not_met, outbid_near
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    item = relationship("Item", back_populates="user_bids")
+
+
+class ValuationDetail(Base):
+    __tablename__ = "valuation_details"
+    id = Column(Integer, primary_key=True, index=True)
+    sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"), nullable=False, unique=True)
+    sample_listings = Column(JSON, default=list)
+    avg_asking_price = Column(Float)
+    median_asking_price = Column(Float)
+    price_range_low = Column(Float)
+    price_range_high = Column(Float)
+    
+    sample_cache = relationship("EbaySampleCache")
 
 
 from sqlalchemy import UniqueConstraint
