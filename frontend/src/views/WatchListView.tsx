@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './WatchListView.css';
-import { X, ExternalLink, CalendarDays, TrendingUp, ArrowUpDown, Gavel, Loader2, LayoutGrid } from 'lucide-react';
-import Modal from '../components/Modal';
+import { X, ExternalLink, Loader2 } from 'lucide-react';
+import ItemDetailModal from '../components/ItemDetailModal';
 
 interface WatchedItem {
   id: number;
@@ -23,22 +23,6 @@ interface WatchedItem {
   };
 }
 
-const normalizeTags = (tags: any): { key: string | null, value: string, fullTag: string }[] => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string').map(t => ({ key: null, value: t, fullTag: t }));
-  if (typeof tags === 'object') {
-    const result: { key: string, value: string, fullTag: string }[] = [];
-    for (const [key, val] of Object.entries(tags)) {
-      if (Array.isArray(val)) {
-        val.forEach(v => result.push({ key, value: String(v), fullTag: `${key}: ${v}` }));
-      } else if (val !== null && val !== undefined && String(val).trim() !== '') {
-        result.push({ key, value: String(val), fullTag: `${key}: ${val}` });
-      }
-    }
-    return result;
-  }
-  return [];
-};
 
 const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -96,15 +80,14 @@ const WatchListView: React.FC = () => {
 
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
-  const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
 
   const handleValuate = async (itemId: number) => {
     setValuatingItems(prev => new Set(prev).add(itemId));
-    
+
     const statuses = ["Analyzing item...", "Using AI...", "Checking eBay...", "Calculating ROI..."];
     let statusIdx = 0;
     setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
-    
+
     const interval = setInterval(() => {
       statusIdx = (statusIdx + 1) % statuses.length;
       setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
@@ -115,25 +98,17 @@ const WatchListView: React.FC = () => {
       const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
       if (response.ok) {
         const newValuation = await response.json();
-        setItems(prev => prev.map(item => 
+        setItems(prev => prev.map(item =>
           item.id === itemId ? { ...item, valuation: newValuation } : item
         ));
         setSelectedItem(prev => prev && prev.id === itemId ? { ...prev, valuation: newValuation } : prev);
-        setValuationErrors(prev => {
-          const next = { ...prev };
-          delete next[itemId];
-          return next;
-        });
       } else {
-        const errData = await response.json().catch(() => ({ detail: "Valuation failed" }));
-        setValuationErrors(prev => ({ ...prev, [itemId]: errData.detail || "Valuation failed" }));
+        await response.json().catch(() => ({ detail: "Valuation failed" }));
         console.error(`Failed to valuate item ${itemId}`);
       }
     } catch (error) {
-      setValuationErrors(prev => ({ ...prev, [itemId]: "Network error" }));
       console.error(`Error valuating item ${itemId}:`, error);
-    } finally {
-      clearInterval(interval);
+    } finally {      clearInterval(interval);
       setValuatingItems(prev => {
         const next = new Set(prev);
         next.delete(itemId);
@@ -285,148 +260,68 @@ const WatchListView: React.FC = () => {
         )}
       </div>
 
-      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="xl">
+      <ItemDetailModal item={selectedItem} isOpen={!!selectedItem} onClose={() => setSelectedItem(null)}>
         {selectedItem && (
-          <div className="item-detail-layout modern">
-            <div className="item-detail-image-panel-bg">
-              {selectedItem.image_url ? (
-                <img
-                  src={getHighResImageUrl(selectedItem.image_url)}
-                  alt={selectedItem.title}
-                  className="item-detail-bg-image"
-                />
-              ) : (
-                <div className="item-detail-no-image-bg">No Image Available</div>
-              )}
+          <>
+            <div className="item-detail-kpi-tile bid">
+              <div className="kpi-label">Current Bid</div>
+              <div className="kpi-value">${selectedItem.current_bid?.toFixed(2) || '0.00'}</div>
             </div>
 
-            <div className="item-detail-overlay-content">
-              <div className="item-detail-content-columns">
-                {/* Left Column: Metadata Pills, Research, Tags */}
-                <div className="item-detail-col left">
-                  <div className="item-detail-subtitle vertical">
-                    <span className="item-pill vertical time-remaining">
-                      <CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} />
-                    </span>
-                    <span className="item-pill vertical lot-number">Lot #{selectedItem.lot_number || 'N/A'}</span>
-                    {selectedItem.category && (
-                      <span className="item-pill vertical category" title={selectedItem.category}>
-                        <LayoutGrid size={14}/> <span className="truncate">{selectedItem.category}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {selectedItem.valuation && (
-                    <div className="detail-section">
-                      <h3>Research Info</h3>
-                      <div className="detail-grid">
-                        <div className="detail-item-custom">
-                          <div className="research-query-header">Search Query</div>
-                          <div className="research-query-term">{selectedItem.valuation.search_query}</div>
-                        </div>
-                        <div className="detail-item">
-                          <span className="label">Sample Size</span>
-                          <span className="value">{selectedItem.valuation.sample_size || 0}</span>
-                        </div>
-                      </div>
+            <div className="detail-section">
+              <h3>Bidding & Value</h3>
+              <div className="detail-grid">
+                {selectedItem.valuation && (
+                  <>
+                    <div className="detail-item">
+                      <span className="label">Est. Value</span>
+                      <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
                     </div>
-                  )}
-
-                  <div className="item-detail-spacer"></div>
-
-                  {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
-                    <div className="detail-section no-header">
-                      <div className="tags-pill-container">
-                        {normalizeTags(selectedItem.tags).map((tag, idx) => (
-                          <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
-                            {tag.value}
-                          </span>
-                        ))}
-                      </div>
+                    <div className="detail-item">
+                      <span className="label">Max Bid</span>
+                      <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
+              </div>
+            </div>
 
-                {/* Center Column: High-Res Image & Title Overlay */}
-                <div className="item-detail-col center">
-                  <div className="item-detail-title-card">
-                    <h2>{selectedItem.title}</h2>
+            <div className="detail-section no-header">
+              <div className="action-column">
+                {valuatingItems.has(selectedItem.id) ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', marginBottom: '12px' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>{valuationStatus[selectedItem.id] || "Loading..."}</span>
                   </div>
-                  {selectedItem.image_url ? (
-                    <img
-                      src={getHighResImageUrl(selectedItem.image_url)}
-                      alt={selectedItem.title}
-                      className="item-detail-center-image"
-                    />
-                  ) : (
-                    <div className="item-detail-no-image-bg">No Image Available</div>
-                  )}
-                </div>
-
-                {/* Right Column: ROI, Stats, and Actions */}
-                <div className="item-detail-col right">
-                  <div className="item-detail-kpi-tile bid">
-                    <div className="kpi-label">Current Bid</div>
-                    <div className="kpi-value">${selectedItem.current_bid?.toFixed(2) || '0.00'}</div>
-                  </div>
-
-                  <div className="detail-section">
-                    <h3>Bidding & Value</h3>
-                    <div className="detail-grid">
-                      {selectedItem.valuation && (
-                        <>
-                          <div className="detail-item">
-                            <span className="label">Est. Value</span>
-                            <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="label">Max Bid</span>
-                            <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="detail-section no-header">
-                    <div className="action-column">
-                      {valuatingItems.has(selectedItem.id) ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', marginBottom: '12px' }}>
-                          <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                          <span>{valuationStatus[selectedItem.id] || "Loading..."}</span>
-                        </div>
-                      ) : (
-                        <button 
-                          className="glass-blue-btn-small"
-                          style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }}
-                          onClick={() => handleValuate(selectedItem.id)}
-                        >
-                          Re-Valuate
-                        </button>
-                      )}
-                      
-                      <div className="action-row">
-                        <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
-                          View Full Auction <ExternalLink size={14} />
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedItem.valuation && (
-                    <div className="item-detail-kpi-tile roi">
-                      <div className="kpi-label">ROI</div>
-                      <div className={`kpi-value ${getRoiValue(selectedItem.valuation, selectedItem.current_bid) > 20 ? 'high' : ''}`}>
-                        {getRoiValue(selectedItem.valuation, selectedItem.current_bid) === Infinity ? '∞%' : `${Math.round(getRoiValue(selectedItem.valuation, selectedItem.current_bid)!)}%`}
-                      </div>
-                    </div>
-                  )}
+                ) : (
+                  <button 
+                    className="glass-blue-btn-small"
+                    style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+                    onClick={() => handleValuate(selectedItem.id)}
+                  >
+                    Re-Valuate
+                  </button>
+                )}
+                
+                <div className="action-row">
+                  <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
+                    View Full Auction <ExternalLink size={14} />
+                  </a>
                 </div>
               </div>
             </div>
-          </div>
+
+            {selectedItem.valuation && (
+              <div className="item-detail-kpi-tile roi">
+                <div className="kpi-label">ROI</div>
+                <div className={`kpi-value ${(getRoiValue(selectedItem.valuation, selectedItem.current_bid) ?? 0) > 20 ? 'high' : ''}`}>
+                  {getRoiValue(selectedItem.valuation, selectedItem.current_bid) === Infinity ? '∞%' : `${Math.round(getRoiValue(selectedItem.valuation, selectedItem.current_bid) ?? 0)}%`}
+                </div>
+              </div>
+            )}
+          </>
         )}
-      </Modal>
+      </ItemDetailModal>
     </div>
   );
 };

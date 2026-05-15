@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './ResearchView.css';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
+import ItemDetailModal from '../components/ItemDetailModal';
 import Tooltip from '../components/Tooltip';
 import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff, Loader2, AlignLeft, AlignCenter, AlignRight, Save, LayoutGrid, List, Target } from 'lucide-react';
 import { useCommandContext } from '../contexts/CommandContext';
@@ -294,14 +295,11 @@ const ResearchView: React.FC = () => {
   const [isBidding, setIsBidding] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
   const [bidSuccess, setBidSuccess] = useState<string | null>(null);
-  const [authRequiredSite, setAuthRequiredSite] = useState<string | null>(null);
-
   useEffect(() => {
     if (selectedItem) {
        setBidAmount('');
        setBidError(null);
        setBidSuccess(null);
-       setAuthRequiredSite(null);
     }
   }, [selectedItem]);
 
@@ -322,7 +320,6 @@ const ResearchView: React.FC = () => {
       
       if (!response.ok) {
         if (response.status === 403 && data.detail?.error === 'captcha_or_2fa_required') {
-          setAuthRequiredSite(data.detail.website_key);
           setBidError("Authentication requires a manual login. Please go to the settings to paste a session cookie, or log in directly on the auction site.");
         } else if (response.status === 401) {
            setBidError("No credentials set. Please go to Settings to add your credentials.");
@@ -1157,154 +1154,74 @@ const ResearchView: React.FC = () => {
         </button>
       )}
 
-      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="xl">
+      <ItemDetailModal item={selectedItem} isOpen={!!selectedItem} onClose={() => setSelectedItem(null)}>
         {selectedItem && (
-          <div className="item-detail-layout modern">
-            <div className="item-detail-image-panel-bg">
-              {selectedItem.image_url ? (
-                <img
-                  src={getHighResImageUrl(selectedItem.image_url)}
-                  alt={selectedItem.title}
-                  className="item-detail-bg-image"
-                />
-              ) : (
-                <div className="item-detail-no-image-bg">No Image Available</div>
-              )}
+          <>
+            <div className="item-detail-kpi-tile bid">
+              <div className="kpi-label">Current Bid</div>
+              <div className="kpi-value">${selectedItem.current_bid?.toFixed(2)}</div>
             </div>
 
-            <div className="item-detail-overlay-content">
-              <div className="item-detail-content-columns">
-                {/* Left Column: Metadata & Research */}
-                <div className="item-detail-col left">
-                  <div className="item-detail-subtitle vertical">
-                    <span className="item-pill vertical time-remaining">
-                      <CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} />
-                    </span>
-                    <span className="item-pill vertical lot-number">Lot #{selectedItem.lot_number}</span>
-                    {selectedItem.category && (
-                      <span className="item-pill vertical category" title={selectedItem.category}>
-                        <LayoutGrid size={14}/> <span className="truncate">{selectedItem.category}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {selectedItem.valuation && (
-                    <div className="detail-section">
-                      <h3>Research Info</h3>
-                      <div className="detail-grid">
-                        <div className="detail-item-custom">
-                          <div className="research-query-header">Search Query</div>
-                          <div className="research-query-term">{selectedItem.valuation.search_query}</div>
-                        </div>
-                        <div className="detail-item">
-                          <span className="label">Sample Size</span>
-                          <span className="value">{selectedItem.valuation.sample_size || 0}</span>
-                        </div>
-                      </div>
+            <div className="detail-section">
+              <h3>Bidding & Value</h3>
+              <div className="detail-grid">
+                {selectedItem.valuation && (
+                  <>
+                    <div className="detail-item">
+                      <span className="label">Est. Value</span>
+                      <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
                     </div>
-                  )}
-
-                  <div className="item-detail-spacer"></div>
-
-                  {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
-                    <div className="detail-section no-header">
-                      <div className="tags-pill-container">
-                        {normalizeTags(selectedItem.tags).map((tag, idx) => (
-                          <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
-                            {tag.value}
-                          </span>
-                        ))}
-                      </div>
+                    <div className="detail-item">
+                      <span className="label">Max Bid</span>
+                      <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
                     </div>
-                  )}
-                </div>
-
-                {/* Center Column: High-Res Image & Title Overlay */}
-                <div className="item-detail-col center">
-                  <div className="item-detail-title-card">
-                    <h2>{selectedItem.title}</h2>
-                  </div>
-                  {selectedItem.image_url ? (
-                    <img
-                      src={getHighResImageUrl(selectedItem.image_url)}
-                      alt={selectedItem.title}
-                      className="item-detail-center-image"
-                    />
-                  ) : (
-                    <div className="item-detail-no-image-bg">No Image Available</div>
-                  )}
-                </div>
-
-                {/* Right Column: ROI, Stats, and Actions */}
-                <div className="item-detail-col right">
-                  <div className="item-detail-kpi-tile bid">
-                    <div className="kpi-label">Current Bid</div>
-                    <div className="kpi-value">${selectedItem.current_bid?.toFixed(2)}</div>
-                  </div>
-
-                  <div className="detail-section">
-                    <h3>Bidding & Value</h3>
-                    <div className="detail-grid">
-                      {selectedItem.valuation && (
-                        <>
-                          <div className="detail-item">
-                            <span className="label">Est. Value</span>
-                            <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="label">Max Bid</span>
-                            <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="detail-section no-header">
-                    <div className="item-detail-bid-section-modern">
-                      <div className="bid-input-group">
-                        <span className="currency-symbol">$</span>
-                        <input 
-                          type="number" 
-                          value={bidAmount}
-                          onChange={(e) => setBidAmount(e.target.value)}
-                          className="modern-bid-input"
-                          placeholder={`Min: $${(selectedItem.current_bid + 1).toFixed(0)}`}
-                          disabled={isBidding}
-                        />
-                        <button 
-                          className="modern-bid-btn" 
-                          onClick={handlePlaceBid} 
-                          disabled={isBidding || !bidAmount}
-                        >
-                          {isBidding ? <Loader2 size={16} className="spinning" /> : 'Bid'}
-                        </button>
-                      </div>
-                      {bidError && <div className="bid-msg error">{bidError}</div>}
-                      {bidSuccess && <div className="bid-msg success">{bidSuccess}</div>}
-                    </div>
-
-                    <div className="action-row" style={{ marginTop: '12px' }}>
-                      <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
-                        View Full Auction <ExternalLink size={14} />
-                      </a>
-                    </div>
-                  </div>
-
-                  {selectedItem.valuation && (
-                    <div className="item-detail-kpi-tile roi">
-                      <div className="kpi-label">ROI</div>
-                      <div className="kpi-value">
-                        {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
+
+            <div className="detail-section no-header">
+              <div className="item-detail-bid-section-modern">
+                <div className="bid-input-group">
+                  <span className="currency-symbol">$</span>
+                  <input 
+                    type="number" 
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    className="modern-bid-input"
+                    placeholder={`Min: $${(selectedItem.current_bid + 1).toFixed(0)}`}
+                    disabled={isBidding}
+                  />
+                  <button 
+                    className="modern-bid-btn" 
+                    onClick={handlePlaceBid} 
+                    disabled={isBidding || !bidAmount}
+                  >
+                    {isBidding ? <Loader2 size={16} className="spinning" /> : 'Bid'}
+                  </button>
+                </div>
+                {bidError && <div className="bid-msg error">{bidError}</div>}
+                {bidSuccess && <div className="bid-msg success">{bidSuccess}</div>}
+              </div>
+
+              <div className="action-row" style={{ marginTop: '12px' }}>
+                <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
+                  View Full Auction <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
+            {selectedItem.valuation && (
+              <div className="item-detail-kpi-tile roi">
+                <div className="kpi-label">ROI</div>
+                <div className="kpi-value">
+                  {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
+                </div>
+              </div>
+            )}
+          </>
         )}
-      </Modal>
+      </ItemDetailModal>
 
       <Modal isOpen={isBulkValuateModalOpen} onClose={() => setIsBulkValuateModalOpen(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
