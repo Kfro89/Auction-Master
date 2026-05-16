@@ -161,12 +161,12 @@ def test_item_serialization_with_valuation_and_bids():
     
     # Assert valuation_detail is present
     assert "valuation" in item_data
-    assert "valuation_detail" in item_data["valuation"]
-    assert item_data["valuation"]["valuation_detail"]["avg_asking_price"] == 100.0
-    assert len(item_data["valuation"]["valuation_detail"]["sample_listings"]) == 1
+    assert "valuation_detail" in item_data
+    assert item_data["valuation_detail"]["avg_asking_price"] == 100.0
+    assert len(item_data["valuation_detail"]["sample_listings"]) == 1
     
     # Assert user_bid_activity is present
-    assert "user_bid_activity" in item_data
-    assert item_data["user_bid_activity"]["user_bid_amount"] == 20.0
-    assert item_data["user_bid_activity"]["user_bid_status"] == "winning"
+    assert "user_bids" in item_data
+    assert item_data["user_bids"]["user_bid_amount"] == 20.0
+    assert item_data["user_bids"]["user_bid_status"] == "winning"
 

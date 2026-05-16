@@ -51,7 +51,7 @@ def serialize_item(item: Item) -> dict:
             
             if getattr(item.valuation.sample_cache, "valuation_detail", None):
                 val_detail = item.valuation.sample_cache.valuation_detail
-                val_dict["valuation_detail"] = {
+                item_dict["valuation_detail"] = {
                     "avg_asking_price": val_detail.avg_asking_price,
                     "median_asking_price": val_detail.median_asking_price,
                     "price_range_low": val_detail.price_range_low,
@@ -61,7 +61,7 @@ def serialize_item(item: Item) -> dict:
         item_dict["valuation"] = val_dict
         
     if getattr(item, "user_bids", None):
-        item_dict["user_bid_activity"] = {
+        item_dict["user_bids"] = {
             "current_bid_amount": item.user_bids.current_bid_amount,
             "user_bid_amount": item.user_bids.user_bid_amount,
             "user_proxy_bid": item.user_bids.user_proxy_bid,
