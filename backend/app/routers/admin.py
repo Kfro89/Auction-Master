@@ -421,9 +421,12 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                 if not login_ok:
                     results["public_surplus"] = {"status": "error", "error": "Session cookie expired or invalid. Please update it in Settings."}
                 else:
-                    my_bid_ids = await scraper.fetch_my_bids()
+                    my_bids_data = await scraper.fetch_my_bids()
+                    my_bid_ids = [b["id"] for b in my_bids_data]
+                    
                     house = db.query(AuctionHouse).filter(AuctionHouse.website_key == "public_surplus").first()
                     if house:
+                        # 1. First, set is_user_bidding=False for items no longer on the dashboard
                         ps_items = db.query(Item).filter(Item.auction_house_id == house.id).all()
                         updated = 0
                         for item in ps_items:
@@ -434,17 +437,57 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
                             if item.is_user_bidding != has_bid:
                                 item.is_user_bidding = has_bid
                                 updated += 1
+                                
+                            if has_bid and not is_winning and bid_activity:
+                                bid_activity.user_bid_status = "outbid"
+                        
+                        # 2. Next, process the items from the dashboard
+                        from datetime import datetime, timedelta, timezone
+                        for bid_data in my_bids_data:
+                            item = db.query(Item).filter(Item.external_id == bid_data["id"], Item.auction_house_id == house.id).first()
                             
-                            if has_bid:
-                                if not bid_activity:
-                                    bid_activity = UserBidActivity(item_id=item.id)
-                                    db.add(bid_activity)
-                                bid_activity.current_bid_amount = item.current_bid
-                                bid_activity.user_proxy_bid = item.current_bid # Fallback since API lacks it
-                                bid_activity.user_bid_amount = item.current_bid
-                                bid_activity.user_bid_status = "winning" if is_winning else "outbid"
+                            if not item:
+                                # Upsert the missing item
+                                item = Item(
+                                    external_id=bid_data["id"],
+                                    title=bid_data["title"],
+                                    description="Public Surplus Item",
+                                    lot_number=bid_data["id"],
+                                    auction_house_id=house.id,
+                                    current_bid=bid_data["current_bid"],
+                                    end_time=datetime.now(timezone.utc) + timedelta(days=7), # Placeholder
+                                    status="open",
+                                    url=f"https://www.publicsurplus.com/sms/auction/view?auc={bid_data['id']}",
+                                    is_user_bidding=True
+                                )
+                                db.add(item)
+                                db.flush() # Get the new item.id
+                                updated += 1
+                            else:
+                                item.current_bid = bid_data["current_bid"]
+                                if not item.is_user_bidding:
+                                    item.is_user_bidding = True
+                                    updated += 1
+                            
+                            # Update the Bid Activity
+                            bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
+                            if not bid_activity:
+                                bid_activity = UserBidActivity(item_id=item.id)
+                                db.add(bid_activity)
+                                
+                            bid_activity.current_bid_amount = bid_data["current_bid"]
+                            bid_activity.user_proxy_bid = bid_data["proxy_bid"] or bid_data["current_bid"]
+                            bid_activity.user_bid_amount = bid_data["user_bid"] or bid_data["current_bid"]
+                            
+                            # Check if outbid: User's proxy might be less than current bid, but on PS dashboard, 
+                            # usually if it's here and proxy >= current bid, you're winning
+                            if bid_activity.user_proxy_bid < bid_activity.current_bid_amount:
+                                bid_activity.user_bid_status = "outbid"
+                            else:
+                                bid_activity.user_bid_status = "winning"
+
                         db.commit()
-                        results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bid_ids)}
+                        results["public_surplus"] = {"status": "success", "updated": updated, "active_bids_found": len(my_bids_data)}
                     else:
                         results["public_surplus"] = {"status": "skipped", "reason": "no auction house"}
             else:
