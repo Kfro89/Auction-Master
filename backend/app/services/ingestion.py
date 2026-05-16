@@ -218,11 +218,12 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
             
             # Fetch tags in batches to not overwhelm LLM
             batch_size = 6
-            total_batches = (len(new_items_to_tag) + batch_size - 1) // batch_size if new_items_to_tag else 0
-            for i in range(0, len(new_items_to_tag), batch_size):
+            total_items = len(new_items_to_tag)
+            for i in range(0, total_items, batch_size):
                 batch_num = (i // batch_size) + 1
+                processed_count = i + len(new_items_to_tag[i:i+batch_size])
                 if progress:
-                    progress["message"] = f"{name} — AI classifying items ({batch_num}/{total_batches})..."
+                    progress["message"] = f"{name} — AI classifying items ({processed_count}/{total_items})..."
                 batch = new_items_to_tag[i:i+batch_size]
                 tasks = []
                 for db_item, desc, cat_id in batch:
@@ -243,7 +244,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 
                 # Batch eBay valuations in parallel
                 if progress:
-                    progress["message"] = f"{name} — running valuations ({batch_num}/{total_batches})..."
+                    progress["message"] = f"{name} — running valuations ({processed_count}/{total_items})..."
                 val_tasks = [valuate_item_background(db_item.id, house.buyer_premium_pct)
                              for db_item in [b[0] for b in batch]]
                 await asyncio.gather(*val_tasks, return_exceptions=True)
@@ -289,9 +290,18 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
     if cookie_setting and cookie_setting.value:
         session_cookie = decrypt_value(cookie_setting.value)
         if session_cookie:
-            await scraper.login(username="", session_cookie=session_cookie)
-            my_bid_ids = await scraper.fetch_my_bids()
-            logger.info(f"Public Surplus: Found {len(my_bid_ids)} active bids for user.")
+            login_ok = await scraper.login(username="", session_cookie=session_cookie)
+            if login_ok:
+                try:
+                    my_bids_data = await scraper.fetch_my_bids()
+                    my_bid_ids = [b['id'] for b in my_bids_data]
+                    logger.info(f"Public Surplus: Found {len(my_bid_ids)} active bids for user.")
+                except PermissionError:
+                    logger.warning("Public Surplus: Cookie expired during bid fetch. Proceeding without bid status.")
+                except Exception as e:
+                    logger.warning(f"Public Surplus: Failed to fetch bids: {e}. Proceeding without bid status.")
+            else:
+                logger.warning("Public Surplus: Session cookie is expired or invalid. Proceeding without bid status.")
     
     total_new_items = 0
     try:
@@ -366,11 +376,12 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
             
             # Batch process tagging
             batch_size = 6
-            total_batches = (len(new_items_to_tag) + batch_size - 1) // batch_size if new_items_to_tag else 0
-            for i in range(0, len(new_items_to_tag), batch_size):
+            total_items = len(new_items_to_tag)
+            for i in range(0, total_items, batch_size):
                 batch_num = (i // batch_size) + 1
+                processed_count = i + len(new_items_to_tag[i:i+batch_size])
                 if progress:
-                    progress["message"] = f"Public Surplus — AI classifying items ({batch_num}/{total_batches})..."
+                    progress["message"] = f"Public Surplus — AI classifying items ({processed_count}/{total_items})..."
                 batch = new_items_to_tag[i:i+batch_size]
                 tasks = []
                 for db_item, desc, cat_id in batch:
@@ -390,7 +401,7 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
                 
                 # Batch eBay valuations in parallel
                 if progress:
-                    progress["message"] = f"Public Surplus — running valuations ({batch_num}/{total_batches})..."
+                    progress["message"] = f"Public Surplus — running valuations ({processed_count}/{total_items})..."
                 val_tasks = [valuate_item_background(db_item.id, house.buyer_premium_pct)
                              for db_item in [b[0] for b in batch]]
                 await asyncio.gather(*val_tasks, return_exceptions=True)
@@ -562,11 +573,12 @@ async def ingest_bidwrangler(db: Session, base_url: str, website_key: str, name:
             db.commit()
             
             batch_size = 6
-            total_batches = (len(new_items_to_tag) + batch_size - 1) // batch_size if new_items_to_tag else 0
-            for i in range(0, len(new_items_to_tag), batch_size):
+            total_items = len(new_items_to_tag)
+            for i in range(0, total_items, batch_size):
                 batch_num = (i // batch_size) + 1
+                processed_count = i + len(new_items_to_tag[i:i+batch_size])
                 if progress:
-                    progress["message"] = f"{name} — AI classifying items ({batch_num}/{total_batches})..."
+                    progress["message"] = f"{name} — AI classifying items ({processed_count}/{total_items})..."
                 batch = new_items_to_tag[i:i+batch_size]
                 tasks = []
                 for db_item, desc, cat_id in batch:
@@ -585,7 +597,7 @@ async def ingest_bidwrangler(db: Session, base_url: str, website_key: str, name:
                 db.commit()
                 
                 if progress:
-                    progress["message"] = f"{name} — running valuations ({batch_num}/{total_batches})..."
+                    progress["message"] = f"{name} — running valuations ({processed_count}/{total_items})..."
                 val_tasks = [valuate_item_background(db_item.id, auction_premium)
                              for db_item in [b[0] for b in batch]]
                 await asyncio.gather(*val_tasks, return_exceptions=True)

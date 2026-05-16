@@ -143,11 +143,29 @@ class PublicSurplusScraper(BaseScraper):
     async def login(self, username: str, password: str = None, session_cookie: str = None) -> bool:
         """
         Public Surplus frequently uses CAPTCHAs on login.
-        If a session_cookie is provided, we can bypass login.
+        If a session_cookie is provided, validate it by hitting a protected page.
         """
         if session_cookie:
-            self.headers["Cookie"] = session_cookie
-            return True
+            self.headers["Cookie"] = session_cookie.strip()
+            # Validate the cookie by requesting the "My Bids" dashboard
+            url = f"{self.base_url}/sms/mys/bids?tm=m"
+            async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
+                try:
+                    response = await client.get(url)
+                    if response.status_code == 401 or response.status_code == 403:
+                        logger.warning("Public Surplus cookie validation failed: session expired or invalid.")
+                        del self.headers["Cookie"]
+                        return False
+                    response.raise_for_status()
+                    return True
+                except httpx.HTTPStatusError as e:
+                    logger.warning(f"Public Surplus cookie validation HTTP error: {e}")
+                    del self.headers["Cookie"]
+                    return False
+                except Exception as e:
+                    logger.error(f"Public Surplus cookie validation error: {e}")
+                    # Network error — can't determine validity, assume ok to avoid false negatives
+                    return True
             
         # Stub for standard HTTP login
         raise NotImplementedError("HTTP login not fully implemented. Session cookie bypass recommended for Public Surplus due to CAPTCHAs.")
@@ -162,32 +180,66 @@ class PublicSurplusScraper(BaseScraper):
         # Stub for bid submission
         raise NotImplementedError("Direct bidding structure not fully mapped for Public Surplus yet.")
 
-    async def fetch_my_bids(self) -> List[str]:
+    async def fetch_my_bids(self) -> List[Dict[str, Any]]:
         """
         Fetches the user's active bids dashboard using the session cookie 
-        and extracts a list of auction/lot IDs the user is currently bidding on.
+        and extracts bidding data.
+        Raises PermissionError if the cookie is rejected (401/403).
         """
         if "Cookie" not in self.headers:
-            return []
+            raise PermissionError("No session cookie set. Call login() first.")
             
         url = f"{self.base_url}/sms/mys/bids?tm=m"
         
         async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
             try:
                 response = await client.get(url)
+                if response.status_code in (401, 403):
+                    raise PermissionError(f"Public Surplus session expired or invalid (HTTP {response.status_code})")
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
                 
-                bidding_ids = []
-                # Grab all 'auc=' links from the dashboard which represent items they are interacting with
-                links = soup.select('a[href*="auc="]')
-                for link in links:
-                    href = link.get('href', '')
-                    match = re.search(r"auc=(\d+)", href)
-                    if match:
-                        bidding_ids.append(match.group(1))
+                bidding_data = []
+                table = soup.find('table', {'class': 'table'})
+                if not table:
+                    return []
+                    
+                tbody = table.find('tbody')
+                if not tbody:
+                    return []
+                    
+                rows = tbody.find_all('tr')
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) >= 8:
+                        auc_id = cols[0].get_text(strip=True)
+                        title_tag = cols[1].find('a')
+                        title = title_tag.get_text(strip=True) if title_tag else "Unknown Title"
+                        end_date = cols[3].get_text(strip=True)
                         
-                return list(set(bidding_ids))
+                        def parse_price(text):
+                            cleaned = text.replace('$', '').replace(',', '').strip()
+                            try:
+                                return float(cleaned)
+                            except ValueError:
+                                return 0.0
+                                
+                        current_bid = parse_price(cols[5].get_text())
+                        user_bid = parse_price(cols[6].get_text())
+                        proxy_bid = parse_price(cols[7].get_text())
+                        
+                        bidding_data.append({
+                            "id": auc_id,
+                            "title": title,
+                            "end_time": end_date,
+                            "current_bid": current_bid,
+                            "user_bid": user_bid,
+                            "proxy_bid": proxy_bid
+                        })
+                        
+                return bidding_data
+            except PermissionError:
+                raise
             except Exception as e:
                 logger.error(f"Error fetching Public Surplus my bids: {e}")
-                return []
+                raise
