@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.database import get_db, Base
 from app.auth import get_current_user
-from app.models import Item, InventoryItem, InventoryParentLot, InventoryCostLineItem
+from app.models import Item, InventoryItem, InventoryParentLot, InventoryCostLineItem, PackagingConfiguration
 
 # In-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -178,3 +178,26 @@ def test_add_refurbishment_costs():
     resp = client.patch(f"/api/inventory/{inv_id}", json={"status": "STAGING"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "STAGING"
+
+def test_auto_packaging():
+    db = TestingSessionLocal()
+    # 1. Create packaging configs
+    config1 = PackagingConfiguration(name="Small Box", length=5.0, width=5.0, height=5.0, total_cost=1.0)
+    config2 = PackagingConfiguration(name="Medium Box", length=10.0, width=10.0, height=10.0, total_cost=2.0)
+    db.add_all([config1, config2])
+    db.commit()
+
+    # 2. Create item
+    inv_item = InventoryItem(title="Gadget", status="STAGING", length=8.0, width=8.0, height=8.0)
+    db.add(inv_item)
+    db.commit()
+    inv_id = inv_item.id
+    db.close()
+
+    # 3. Trigger auto-package
+    response = client.post(f"/api/inventory/{inv_id}/auto-package")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["package_name"] == "Medium Box" # Fits in medium, but not small
+    assert data["cost"] == 2.0

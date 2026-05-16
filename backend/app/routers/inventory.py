@@ -219,6 +219,41 @@ async def add_cost_line_item(id: int, request: CostLineItemCreate, db: Session =
     
     return [{"id": c.id, "label": c.label, "amount": c.amount, "category": c.category, "created_at": c.created_at} for c in item.cost_line_items]
 
+from ..services.ai_staging import generate_ai_listing, select_best_packaging
+from ..services.labels import generate_thermal_label_pdf
+from fastapi.responses import Response
+
+@router.post("/{id}/label")
+async def get_label(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    pdf_content = await generate_thermal_label_pdf(item)
+    return Response(content=pdf_content, media_type="application/pdf")
+
+@router.post("/{id}/auto-package")
+async def auto_package_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    best_fit = await select_best_packaging(item, db)
+    if not best_fit:
+        return {"status": "no_fit_found"}
+    
+    # Add packaging cost
+    cost_line = InventoryCostLineItem(
+        inventory_item_id=id,
+        label=f"Packaging: {best_fit.name}",
+        amount=best_fit.total_cost,
+        category="packaging"
+    )
+    db.add(cost_line)
+    db.commit()
+    
+    return {"status": "success", "package_name": best_fit.name, "cost": best_fit.total_cost}
+
 @router.post("/{id}/draft")
 async def draft_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
