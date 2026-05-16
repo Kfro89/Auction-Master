@@ -11,7 +11,7 @@ from .auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 # For now, we'll let Alembic handle migrations, but ensure tables are created
 # Base.metadata.create_all(bind=engine)
 
-from .routers import admin, items, inventory, credentials, packaging
+from .routers import admin, items, inventory, credentials, packaging, ebay
 from .services.valuation_worker import process_pending_valuations
 from .services.ingestion import ingest_auctioneer_software, ingest_public_surplus, ingest_bidwrangler
 from .database import SessionLocal
@@ -94,6 +94,7 @@ app.include_router(items.router, prefix="/api/items", tags=["items"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["inventory"])
 app.include_router(credentials.router, prefix="/api/credentials", tags=["credentials"])
 app.include_router(packaging.router, prefix="/api/packaging", tags=["packaging"])
+app.include_router(ebay.router, prefix="/api/ebay", tags=["ebay"])
 
 @app.post("/api/auth/login")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):

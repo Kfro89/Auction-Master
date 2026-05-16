@@ -236,6 +236,39 @@ class ValuationDetail(Base):
     sample_cache = relationship("EbaySampleCache", back_populates="valuation_detail")
 
 
+class EbayListing(Base):
+    __tablename__ = "ebay_listings"
+    id = Column(Integer, primary_key=True, index=True)
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=True)
+    ebay_item_id = Column(String, index=True, nullable=False)
+    title = Column(String)
+    price = Column(Float)
+    status = Column(String) # active, ended, sold
+    views = Column(Integer, default=0)
+    watchers = Column(Integer, default=0)
+    listed_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
+    inventory_item = relationship("InventoryItem")
+    order = relationship("EbayOrder", back_populates="listing", uselist=False)
+
+class EbayOrder(Base):
+    __tablename__ = "ebay_orders"
+    id = Column(Integer, primary_key=True, index=True)
+    ebay_order_id = Column(String, index=True, nullable=False)
+    ebay_listing_id = Column(Integer, ForeignKey("ebay_listings.id"))
+    buyer_username = Column(String)
+    total_paid = Column(Float)
+    ebay_fees = Column(Float)
+    shipping_paid_by_buyer = Column(Float)
+    actual_shipping_cost = Column(Float)
+    status = Column(String) # paid, shipped, cancelled, returned
+    paid_at = Column(DateTime(timezone=True))
+    shipped_at = Column(DateTime(timezone=True))
+
+    listing = relationship("EbayListing", back_populates="order")
+
+
 from sqlalchemy import UniqueConstraint
 
 class UserAuctionCredential(Base):
