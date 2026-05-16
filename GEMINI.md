@@ -18,23 +18,27 @@ Auction Master is a comprehensive Auction Arbitrage ERP suite designed to automa
 ## 🌍 Distributed Development Environment
 
 This project utilizes a distributed development architecture across a local laptop and a remote machine:
+
 - **Execution Context:** The AI agent (Gemini CLI) and mobile application testing (Xcode/iOS Simulator) are executed on the **local laptop**.
 - **Remote Application Hosting:** The core application stack (FastAPI backend, React frontend web app, and PostgreSQL database) runs on a **remote machine at `192.168.0.16`** and is exposed to the public internet via a reverse proxy at `https://auction.autom8tr.com`.
 - **Environment Considerations:** Be careful about local-only env variables and files. They should all be stored in the `.env` file and not committed to version control.
 - **Code Modification Rules:**
-    - Changes to the core application (Backend/Frontend Web) must be executed on the remote machine (e.g., via SSH or Docker exec commands).
-    - Changes to the Flutter Mobile App code are made on the local laptop and will be pushed/synced to the remote machine's repository.
+  - Changes to the core application (Backend/Frontend Web) must be executed on the remote machine (e.g., via SSH or Docker exec commands).
+  - Changes to the Flutter Mobile App code are made on the local laptop and will be pushed/synced to the remote machine's repository.
 
 ## 🛠 Building and Running
 
 ### Docker (Recommended for Full Stack)
 
 The entire web/backend stack can be launched via Docker Compose:
+
 ```bash
 # Copy env template if needed: cp .env.template .env
 docker-compose up --build
 ```
+
 **Service Endpoints:**
+
 - **Frontend:** `http://localhost:5174` (mapped to 5173 internally).
 - **Backend API:** `http://localhost:8000` (API docs at `/docs`).
 - **PostgreSQL:** `localhost:5434`.
@@ -42,6 +46,7 @@ docker-compose up --build
 ### Manual Development Setup
 
 **Backend:**
+
 ```bash
 cd backend
 python -m venv venv
@@ -52,6 +57,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Frontend:**
+
 ```bash
 cd frontend
 npm install
@@ -85,4 +91,8 @@ npm run dev -- --host
 - `docs/superpowers/`: Detailed specs and implementation plans for each project phase.
 
 ---
+
 **AI Integration:** The workspace integrates the `Gemini-Kit` extension, suggesting an AI-assisted workflow with specific agents (Planner, Coder, Reviewer). Use the defined planning phases and ensure thorough testing of logic.
+
+**Publically accessible site**
+The frontend of this website is currently hosted at https://auction.autom8tr.com/ and can be accessed from any device on the internet. Use this as the base to test any new features or changes to the frontend. In addition, when needed to authenticate with any other services or utilize oauth the required callbacks should be directed to https://auction.autom8tr.com/.

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './ResearchView.css';
+import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
+import ItemDetailModal from '../components/ItemDetailModal';
 import Tooltip from '../components/Tooltip';
 import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff, Loader2, AlignLeft, AlignCenter, AlignRight, Save, LayoutGrid, List, Target } from 'lucide-react';
 import { useCommandContext } from '../contexts/CommandContext';
 import type { Command } from '../contexts/CommandContext';
+import { CountdownTimer } from '../components/CountdownTimer';
+import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
 
 interface Item {
   id: number;
@@ -37,72 +41,6 @@ interface Item {
   is_watched?: boolean;
   is_user_bidding?: boolean;
 }
-
-const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
-  const [timeLeft, setTimeLeft] = useState<string>('');
-
-  useEffect(() => {
-    if (!endTime) {
-      setTimeLeft('Unknown');
-      return;
-    }
-
-    const calculateTime = () => {
-      const now = new Date().getTime();
-      const end = new Date(endTime).getTime();
-      
-      if (isNaN(end)) {
-        setTimeLeft('Unknown');
-        return;
-      }
-
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setTimeLeft('Ending Now');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-      if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h`);
-      } else if (hours > 0) {
-        setTimeLeft(`${hours}h ${mins}m`);
-      } else if (mins > 0) {
-        setTimeLeft(`${mins}m ${secs}s`);
-      } else {
-        setTimeLeft(`${secs}s`);
-      }
-    };
-
-    calculateTime();
-    const timer = setInterval(calculateTime, 1000);
-    return () => clearInterval(timer);
-  }, [endTime]);
-
-  return <span className={`timer-text ${timeLeft === 'Ending Now' ? 'ending-now' : ''}`}>{timeLeft}</span>;
-};
-
-const normalizeTags = (tags: any): { key: string | null, value: string, fullTag: string }[] => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string').map(t => ({ key: null, value: t, fullTag: t }));
-  if (typeof tags === 'object') {
-    const result: { key: string, value: string, fullTag: string }[] = [];
-    for (const [key, val] of Object.entries(tags)) {
-      if (Array.isArray(val)) {
-        val.forEach(v => result.push({ key, value: String(v), fullTag: `${key}: ${v}` }));
-      } else if (val !== null && val !== undefined && String(val).trim() !== '') {
-        result.push({ key, value: String(val), fullTag: `${key}: ${val}` });
-      }
-    }
-    return result;
-  }
-  return [];
-};
 
 export interface ColumnConfig {
   width: number;
@@ -294,6 +232,22 @@ const VehiclesView: React.FC = () => {
 
   // Modal State
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/admin/settings');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user_timezone) {
+          setTimezone(data.user_timezone);
+          localStorage.setItem('user_timezone', data.user_timezone);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch settings for timezone:', e);
+    }
+  };
 
   // Filter State
   const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
@@ -321,6 +275,7 @@ const VehiclesView: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
+    fetchSettings();
     
     const fetchJobStatus = async () => {
       try {
@@ -463,12 +418,6 @@ const VehiclesView: React.FC = () => {
       console.error(`Error triggering bulk valuation:`, error);
       setBulkValuateProgress(prev => ({ ...prev, active: false }));
     }
-  };
-
-  const getHighResImageUrl = (url: string) => {
-    if (!url) return '';
-    // Replace typical patterns from scraping for high-res images
-    return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
   };
 
   const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
@@ -677,129 +626,129 @@ const VehiclesView: React.FC = () => {
   if (loading) return <div className="loading">Loading items...</div>;
 
   return (
-    <div className="research-view">
-      <header className="view-header">
-        <div className="header-title">
-          <h1>Auction Research</h1>
-          <p>Real-time arbitrage opportunities from top auction houses.</p>
-        </div>
-        <div className="header-actions">
-          <Tooltip text="Refresh data from all auction houses">
-            <button 
-              className={`action-btn scrape-btn ${isScraping ? 'scraping' : ''}`}
-              onClick={handleScrape}
-              disabled={isScraping}
-            >
-              {isScraping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
-              {isScraping ? 'Scanning...' : 'Check for New Items'}
-            </button>
-          </Tooltip>
-          <Tooltip text="Update valuations for all items">
-            <button 
-              className="action-btn"
-              onClick={() => setIsBulkValuateModalOpen(true)}
-              disabled={bulkValuateProgress.active}
-            >
-              {bulkValuateProgress.active ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
-              {bulkValuateProgress.active ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})` : 'Update Valuations'}
-            </button>
-          </Tooltip>
-        </div>
-      </header>
+    <ViewContainer className="research-view">
+      <ViewHeader 
+        title="Vehicle Research" 
+        subtitle="Real-time arbitrage opportunities from top auction houses."
+        actions={
+          <>
+            <Tooltip text="Refresh data from all auction houses">
+              <button 
+                className={`action-btn scrape-btn ${isScraping ? 'scraping' : ''}`}
+                onClick={handleScrape}
+                disabled={isScraping}
+              >
+                {isScraping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
+                {isScraping ? 'Scanning...' : 'Check for New Items'}
+              </button>
+            </Tooltip>
+            <Tooltip text="Update valuations for all items">
+              <button 
+                className="action-btn"
+                onClick={() => setIsBulkValuateModalOpen(true)}
+                disabled={bulkValuateProgress.active}
+              >
+                {bulkValuateProgress.active ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
+                {bulkValuateProgress.active ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})` : 'Update Valuations'}
+              </button>
+            </Tooltip>
+          </>
+        }
+      />
 
-      <section className="kpi-bar">
-        <div className={`kpi-card ${filter === 'today' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}>
-          <div className="kpi-icon-wrap"><Clock size={24} className="kpi-icon"/></div>
-          <div className="kpi-info">
-            <span className="kpi-label">Ending Today</span>
-            <span className="kpi-value">{kpis.today} <small>Items</small></span>
-          </div>
-        </div>
-        <div className={`kpi-card ${filter === 'tomorrow' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}>
-          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
-          <div className="kpi-info">
-            <span className="kpi-label">Ending Tomorrow</span>
-            <span className="kpi-value">{kpis.tomorrow} <small>Items</small></span>
-          </div>
-        </div>
-        <div className={`kpi-card ${filter === 'week' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}>
-          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
-          <div className="kpi-info">
-            <span className="kpi-label">Ending This Week</span>
-            <span className="kpi-value">{kpis.week} <small>Items</small></span>
-          </div>
-        </div>
-      </section>
+      <KpiBar>
+        <KpiCard 
+          icon={<Clock size={24} />} 
+          label="Ending Today" 
+          value={kpis.today} 
+          secondaryValue="Items"
+          active={filter === 'today'}
+          onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}
+        />
+        <KpiCard 
+          icon={<CalendarDays size={24} />} 
+          label="Ending Tomorrow" 
+          value={kpis.tomorrow} 
+          secondaryValue="Items"
+          active={filter === 'tomorrow'}
+          onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}
+        />
+        <KpiCard 
+          icon={<CalendarDays size={24} />} 
+          label="Ending This Week" 
+          value={kpis.week} 
+          secondaryValue="Items"
+          active={filter === 'week'}
+          onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}
+        />
+      </KpiBar>
 
       <section className="grid-section">
-        <div className="saas-view-header">
-          <h1 className="saas-title">Available Items</h1>
-          <div className="saas-filters">
-            <button 
-              className="action-btn"
-              onClick={() => setViewMode(prev => prev === 'table' ? 'grid' : 'table')}
-              title="Change View"
-              style={{ padding: '0.5rem 0.75rem' }}
-            >
-              {viewMode === 'table' ? <LayoutGrid size={16} /> : <List size={16} />}
-              <span>Change View</span>
-            </button>
-            <div className="roi-setting">
-              <Target size={16} />
-              <label>Target ROI:</label>
-              <input 
-                type="number" 
-                className="roi-input"
-                value={targetRoi} 
-                onChange={(e) => setTargetRoi(Number(e.target.value))}
-                min="0"
-                max="500"
-              />
-              <span className="roi-percent">%</span>
-            </div>
-            <select 
-              className="saas-input"
-              value={auctionHouseFilter}
-              onChange={(e) => setAuctionHouseFilter(e.target.value)}
-            >
-              <option value="">All Sources</option>
-              {Object.entries(AUCTION_HOUSE_MAP).map(([id, ah]) => (
-                <option key={id} value={id}>{ah.name}</option>
-              ))}
-            </select>
+        <FilterBar title="Available Vehicles">
+          <button 
+            className="action-btn"
+            onClick={() => setViewMode(prev => prev === 'table' ? 'grid' : 'table')}
+            title="Change View"
+            style={{ padding: '0.5rem 0.75rem' }}
+          >
+            {viewMode === 'table' ? <LayoutGrid size={16} /> : <List size={16} />}
+            <span>Change View</span>
+          </button>
+          <div className="roi-setting">
+            <Target size={16} />
+            <label>Target ROI:</label>
             <input 
-              type="text" 
-              className="saas-input search-input"
-              placeholder="Search title, lot, or tags..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              type="number" 
+              className="roi-input"
+              value={targetRoi} 
+              onChange={(e) => setTargetRoi(Number(e.target.value))}
+              min="0"
+              max="500"
             />
-            <select 
-              className="saas-input"
-              value={parentCategoryFilter}
-              onChange={(e) => {
-                setParentCategoryFilter(e.target.value);
-                setSubCategoryFilter('');
-              }}
-            >
-              <option value="">All Categories</option>
-              {parentCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <select 
-              className="saas-input"
-              value={subCategoryFilter}
-              onChange={(e) => setSubCategoryFilter(e.target.value)}
-              disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
-            >
-              <option value="">All Sub-Categories</option>
-              {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
-                <option key={sub} value={sub}>{sub}</option>
-              ))}
-            </select>
+            <span className="roi-percent">%</span>
           </div>
-        </div>
+          <select 
+            className="saas-input"
+            value={auctionHouseFilter}
+            onChange={(e) => setAuctionHouseFilter(e.target.value)}
+          >
+            <option value="">All Sources</option>
+            {Object.entries(AUCTION_HOUSE_MAP).map(([id, ah]) => (
+              <option key={id} value={id}>{ah.name}</option>
+            ))}
+          </select>
+          <input 
+            type="text" 
+            className="saas-input search-input"
+            placeholder="Search title, lot, or tags..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <select 
+            className="saas-input"
+            value={parentCategoryFilter}
+            onChange={(e) => {
+              setParentCategoryFilter(e.target.value);
+              setSubCategoryFilter('');
+            }}
+          >
+            <option value="">All Categories</option>
+            {parentCategories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <select 
+            className="saas-input"
+            value={subCategoryFilter}
+            onChange={(e) => setSubCategoryFilter(e.target.value)}
+            disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
+          >
+            <option value="">All Sub-Categories</option>
+            {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+        </FilterBar>
         {viewMode === 'table' ? (
           <table className="research-table">
             <thead 
@@ -906,7 +855,10 @@ const VehiclesView: React.FC = () => {
                       ) : '--'}
                     </td>
                     <td style={getColStyle('time')}>
-                      <CountdownTimer endTime={item.end_time} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
+                        <span style={{ fontSize: '10px', opacity: 0.6 }}>{formatAuctionDate(item.end_time, timezone)}</span>
+                      </div>
                     </td>
                     <td style={getColStyle('actions')}>
                       <div className="action-buttons-cell">
@@ -955,6 +907,135 @@ const VehiclesView: React.FC = () => {
               })}
             </tbody>
           </table>
+        ) : (
+          <div className="research-grid">
+            {sortedItems.map(item => {
+              const isValuating = valuatingItems.has(item.id);
+              
+              const getRoiClass = (roi: number | null) => {
+                if (roi === null) return '';
+                if (roi >= targetRoi) return 'roi-good';
+                if (roi >= targetRoi - 10) return 'roi-warning';
+                return 'roi-neutral';
+              };
+
+              return (
+                <div key={item.id} className="research-card">
+                  <div className="research-card-image-container">
+                    <div className="research-card-title-overlay">
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={item.title}>
+                        {item.title}
+                      </a>
+                    </div>
+                    <img 
+                      src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
+                      className="research-card-image" 
+                      alt={item.title} 
+                      onClick={() => {
+                        setSelectedItem(item);
+                        clearNewStatus(item.id);
+                      }}
+                    />
+                    <div className="watch-timer-overlay">
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
+                        <span style={{ fontSize: '9px', opacity: 0.8 }}>{formatAuctionDate(item.end_time, timezone)}</span>
+                      </div>
+                    </div>
+                    {newItemIds.has(item.id) && (
+                      <div className="new-badge-overlay grid-overlay">
+                        NEW
+                      </div>
+                    )}
+                  </div>
+                  <div className="research-card-content">
+                    
+                    <div className="research-card-stats">
+                      <div className="research-card-stat">
+                        <span className="stat-label">Bid</span>
+                        <span className="stat-value font-bold">${item.current_bid.toFixed(2)}</span>
+                      </div>
+                      
+                      {item.valuation && (
+                        <>
+                          <div className="research-card-stat">
+                            <span className="stat-label">Est. Value</span>
+                            <Tooltip text={
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', minWidth: '150px', padding: '4px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Query</div>
+                                <div style={{ fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'normal', lineHeight: 1.3 }}>"{item.valuation.search_query || 'Unknown'}"</div>
+                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
+                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
+                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mean Price</div>
+                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.mean?.toFixed(2) || '--'}</div>
+                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trimmed Median</div>
+                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>${item.valuation.trimmed_median?.toFixed(2) || '--'}</div>
+                              </div>
+                            }>
+                              <span className="stat-value text-emerald-600 font-bold" style={{ cursor: 'help', borderBottom: '1px dashed rgba(16, 185, 129, 0.4)' }}>
+                                ${item.valuation.est_market_value.toFixed(2)}
+                              </span>
+                            </Tooltip>
+                          </div>
+                          <div className="research-card-stat">
+                            <span className="stat-label">ROI</span>
+                            {item.computedRoi !== null ? (
+                              <span className={`roi-badge ${getRoiClass(item.computedRoi)}`} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>
+                                {item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`}
+                              </span>
+                            ) : '--'}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="research-card-actions">
+                      <button 
+                        onClick={() => toggleWatchStatus(item.id, !!item.is_watched)}
+                        className={`glass-eye-btn ${item.is_watched ? 'watched' : ''}`}
+                        title={item.is_watched ? "Remove from Watch List" : "Add to Watch List"}
+                      >
+                        {item.is_watched ? <Eye size={16} className="text-emerald-500" /> : <EyeOff size={16} className="text-slate-400" />}
+                      </button>
+
+                      {isValuating ? (
+                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                      ) : valuationErrors[item.id] ? (
+                         <button 
+                          className="small-btn"
+                          onClick={() => {
+                            setValuationErrors(prev => {
+                              const next = { ...prev };
+                              delete next[item.id];
+                              return next;
+                            });
+                            handleValuate(item.id);
+                          }}
+                        >
+                          Retry
+                        </button>
+                      ) : (
+                        <button 
+                          className="small-btn"
+                          onClick={() => handleValuate(item.id)}
+                          disabled={isValuating}
+                          style={{ flex: 1 }}
+                        >
+                          Valuate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
         ) : (
           <div className="research-grid">
             {sortedItems.map(item => {
@@ -1078,154 +1159,22 @@ const VehiclesView: React.FC = () => {
               );
             })}
           </div>
-        )}
-      </section>
-
       {isEditMode && (
         <button className="floating-save-btn" onClick={saveColumnConfig} title="Save Column Layout">
           <Save size={24} />
         </button>
       )}
 
-      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="xl">
-        {selectedItem && (
-          <div className="item-detail-layout modern">
-            <div className="item-detail-image-panel-bg">
-              {selectedItem.image_url ? (
-                <img
-                  src={getHighResImageUrl(selectedItem.image_url)}
-                  alt={selectedItem.title}
-                  className="item-detail-bg-image"
-                />
-              ) : (
-                <div className="item-detail-no-image-bg">No Image Available</div>
-              )}
-            </div>
-
-            <div className="item-detail-overlay-content">
-              <div className="item-detail-content-columns">
-                {/* Left Column: Metadata & Vehicle Specs */}
-                <div className="item-detail-col left">
-                  <div className="item-detail-subtitle vertical">
-                    <span className="item-pill vertical time-remaining">
-                      <CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} />
-                    </span>
-                    <span className="item-pill vertical lot-number">Lot #{selectedItem.lot_number}</span>
-                    {selectedItem.vin && (
-                      <span className="item-pill vertical vin mono">
-                        {selectedItem.vin}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="detail-section">
-                    <h3>Vehicle Specs</h3>
-                    <div className="detail-grid">
-                      {selectedItem.vehicle_year && (
-                        <div className="detail-item">
-                          <span className="label">Year</span>
-                          <span className="value">{selectedItem.vehicle_year}</span>
-                        </div>
-                      )}
-                      {selectedItem.vehicle_make && (
-                        <div className="detail-item">
-                          <span className="label">Make</span>
-                          <span className="value">{selectedItem.vehicle_make}</span>
-                        </div>
-                      )}
-                      {selectedItem.vehicle_model && (
-                        <div className="detail-item">
-                          <span className="label">Model</span>
-                          <span className="value">{selectedItem.vehicle_model}</span>
-                        </div>
-                      )}
-                      {selectedItem.vehicle_trim && (
-                        <div className="detail-item">
-                          <span className="label">Trim</span>
-                          <span className="value">{selectedItem.vehicle_trim}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="item-detail-spacer"></div>
-
-                  {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
-                    <div className="detail-section no-header">
-                      <div className="tags-pill-container">
-                        {normalizeTags(selectedItem.tags).map((tag, idx) => (
-                          <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
-                            {tag.value}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Center Column: High-Res Image & Title Overlay */}
-                <div className="item-detail-col center">
-                  <div className="item-detail-title-card">
-                    <h2>{selectedItem.title}</h2>
-                  </div>
-                  {selectedItem.image_url ? (
-                    <img
-                      src={getHighResImageUrl(selectedItem.image_url)}
-                      alt={selectedItem.title}
-                      className="item-detail-center-image"
-                    />
-                  ) : (
-                    <div className="item-detail-no-image-bg">No Image Available</div>
-                  )}
-                </div>
-
-                {/* Right Column: ROI, Bidding & Value, and Actions */}
-                <div className="item-detail-col right">
-                  <div className="item-detail-kpi-tile bid">
-                    <div className="kpi-label">Current Bid</div>
-                    <div className="kpi-value">${selectedItem.current_bid?.toFixed(2)}</div>
-                  </div>
-
-                  <div className="detail-section">
-                    <h3>Bidding & Value</h3>
-                    <div className="detail-grid">
-                      {selectedItem.valuation && (
-                        <>
-                          <div className="detail-item">
-                            <span className="label">Est. Value</span>
-                            <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="label">Max Bid</span>
-                            <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="detail-section no-header">
-                    <div className="action-row" style={{ marginTop: '12px' }}>
-                      <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
-                        View Full Auction <ExternalLink size={14} />
-                      </a>
-                    </div>
-                  </div>
-
-                  {selectedItem.valuation && (
-                    <div className="item-detail-kpi-tile roi">
-                      <div className="kpi-label">ROI</div>
-                      <div className="kpi-value">
-                        {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <ItemDetailModal 
+        item={selectedItem as any} 
+        isOpen={!!selectedItem} 
+        onClose={() => setSelectedItem(null)}
+        viewContext="vehicles"
+        onValuate={(id) => handleValuate(id)}
+        isValuating={selectedItem ? valuatingItems.has(selectedItem.id) : false}
+        valuationStatusText={selectedItem ? valuationStatus[selectedItem.id] : undefined}
+        userTimezone={timezone}
+      />
 
       <Modal isOpen={isBulkValuateModalOpen} onClose={() => setIsBulkValuateModalOpen(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1248,7 +1197,7 @@ const VehiclesView: React.FC = () => {
           </div>
         </div>
       </Modal>
-    </div>
+    </ViewContainer>
   );
 };
 

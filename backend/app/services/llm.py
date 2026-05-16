@@ -127,10 +127,12 @@ Instructions:
    - "Features": A fallback list of 2-3 other notable semantic keywords.
    - "VIN": If the item is a vehicle, extract the exact 17-character alphanumeric Vehicle Identification Number if found.
 5. Provide a list of exactly 3 eBay search queries:
+   - If an image is provided, aggressively look for Model Numbers or Serial Numbers on labels/stickers to formulate highly precise queries.
    - If "item_class" is "car_part", the queries MUST include the vehicle Year, Make, Model, and the Part Name.
-   - Otherwise, follow standard progression: [0] Highly specific, [1] Slightly broader, [2] Broad fallback.
-6. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (dictionary mapping keys to string or list of strings), "item_class" (string), and "search_queries" (list of strings).
-7. Do not include markdown formatting, code blocks, or explanations.
+   - Otherwise, follow standard progression: [0] Highly specific (using model numbers if found), [1] Slightly broader, [2] Broad fallback.
+6. Determine the "normalized_condition_id" for eBay based on the condition notes. Use: "1000" (New), "3000" (Used), "7000" (For parts/not working). Default to "3000" if unsure.
+7. Return ONLY a JSON object with keys: "category" (string), "type" (string), "tags" (dictionary mapping keys to string or list of strings), "item_class" (string), "normalized_condition_id" (string), and "search_queries" (list of strings).
+8. Do not include markdown formatting, code blocks, or explanations.
 """
     user_prompt_text = f"Raw Category: {raw_category}\nTitle: {title}\nDescription: {description[:500] if description else 'N/A'}"
     
@@ -185,7 +187,8 @@ Instructions:
                 "tags": raw_tags,
                 "brand": brand,
                 "search_queries": [str(q) for q in result.get("search_queries", []) if q],
-                "item_class": result.get("item_class", "other")
+                "item_class": result.get("item_class", "other"),
+                "normalized_condition_id": str(result.get("normalized_condition_id", "3000"))
             }
             
     except Exception as e:
@@ -195,7 +198,8 @@ Instructions:
             "type": "General",
             "tags": {},
             "search_queries": [title[:50]],
-            "item_class": "other"
+            "item_class": "other",
+            "normalized_condition_id": "3000"
         }
 
 async def classify_item(title: str, description: str, raw_category: str) -> dict:

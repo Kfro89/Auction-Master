@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './ResearchView.css';
-import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
-import ItemDetailModal from '../components/ItemDetailModal';
 import Tooltip from '../components/Tooltip';
 import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, Eye, EyeOff, Loader2, AlignLeft, AlignCenter, AlignRight, Save, LayoutGrid, List, Target } from 'lucide-react';
 import { useCommandContext } from '../contexts/CommandContext';
 import type { Command } from '../contexts/CommandContext';
-import { CountdownTimer } from '../components/CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
 
 interface Item {
   id: number;
@@ -35,6 +31,71 @@ interface Item {
   is_user_bidding?: boolean;
 }
 
+const CountdownTimer: React.FC<{ endTime: string | null }> = ({ endTime }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
+
+  useEffect(() => {
+    if (!endTime) {
+      setTimeLeft('Unknown');
+      return;
+    }
+
+    const calculateTime = () => {
+      const now = new Date().getTime();
+      const end = new Date(endTime).getTime();
+      
+      if (isNaN(end)) {
+        setTimeLeft('Unknown');
+        return;
+      }
+
+      const diff = end - now;
+
+      if (diff <= 0) {
+        setTimeLeft('Ending Now');
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+      if (days > 0) {
+        setTimeLeft(`${days}d ${hours}h`);
+      } else if (hours > 0) {
+        setTimeLeft(`${hours}h ${mins}m`);
+      } else if (mins > 0) {
+        setTimeLeft(`${mins}m ${secs}s`);
+      } else {
+        setTimeLeft(`${secs}s`);
+      }
+    };
+
+    calculateTime();
+    const timer = setInterval(calculateTime, 1000);
+    return () => clearInterval(timer);
+  }, [endTime]);
+
+  return <span className={`timer-text ${timeLeft === 'Ending Now' ? 'ending-now' : ''}`}>{timeLeft}</span>;
+};
+
+const normalizeTags = (tags: any): { key: string | null, value: string, fullTag: string }[] => {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string').map(t => ({ key: null, value: t, fullTag: t }));
+  if (typeof tags === 'object') {
+    const result: { key: string, value: string, fullTag: string }[] = [];
+    for (const [key, val] of Object.entries(tags)) {
+      if (Array.isArray(val)) {
+        val.forEach(v => result.push({ key, value: String(v), fullTag: `${key}: ${v}` }));
+      } else if (val !== null && val !== undefined && String(val).trim() !== '') {
+        result.push({ key, value: String(val), fullTag: `${key}: ${val}` });
+      }
+    }
+    return result;
+  }
+  return [];
+};
 
 export interface ColumnConfig {
   width: number;
@@ -202,7 +263,13 @@ const ResearchView: React.FC = () => {
       className={`${className} ${sortKey && !isEditMode ? 'sortable' : ''}`}
       style={{ ...getColStyle(colId) }}
     >
-      <div className={`header-content ${(columnConfig[colId] || DEFAULT_COLUMNS[colId] || { align: 'left' }).align}`}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: (columnConfig[colId] || DEFAULT_COLUMNS[colId] || { align: 'left' }).align === 'right' ? 'flex-end' : (columnConfig[colId] || DEFAULT_COLUMNS[colId] || { align: 'left' }).align === 'center' ? 'center' : 'flex-start', 
+        alignItems: 'center', 
+        width: '100%', 
+        position: 'relative' 
+      }}>
         {content} {sortKey && renderSortIcon(sortKey)}
         
         {isEditMode && (
@@ -221,51 +288,41 @@ const ResearchView: React.FC = () => {
 
   // Modal State
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
-
-  const fetchSettings = async () => {
-    try {
-      const response = await fetch('/api/admin/settings');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.user_timezone) {
-          setTimezone(data.user_timezone);
-          localStorage.setItem('user_timezone', data.user_timezone);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch settings for timezone:', e);
-    }
-  };
   
   // Bidding State
+  const [bidAmount, setBidAmount] = useState<string>('');
   const [isBidding, setIsBidding] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
   const [bidSuccess, setBidSuccess] = useState<string | null>(null);
+  const [authRequiredSite, setAuthRequiredSite] = useState<string | null>(null);
+
   useEffect(() => {
     if (selectedItem) {
+       setBidAmount('');
        setBidError(null);
        setBidSuccess(null);
+       setAuthRequiredSite(null);
     }
   }, [selectedItem]);
 
-  const handlePlaceBid = async (itemId: number, amount: string) => {
-    if (!amount || isNaN(Number(amount))) return;
+  const handlePlaceBid = async () => {
+    if (!selectedItem || !bidAmount || isNaN(Number(bidAmount))) return;
     setIsBidding(true);
     setBidError(null);
     setBidSuccess(null);
     
     try {
-      const response = await fetch(`/api/items/${itemId}/bid`, {
+      const response = await fetch(`/api/items/${selectedItem.id}/bid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Number(amount) })
+        body: JSON.stringify({ amount: Number(bidAmount) })
       });
       
       const data = await response.json();
       
       if (!response.ok) {
         if (response.status === 403 && data.detail?.error === 'captcha_or_2fa_required') {
+          setAuthRequiredSite(data.detail.website_key);
           setBidError("Authentication requires a manual login. Please go to the settings to paste a session cookie, or log in directly on the auction site.");
         } else if (response.status === 401) {
            setBidError("No credentials set. Please go to Settings to add your credentials.");
@@ -276,9 +333,10 @@ const ResearchView: React.FC = () => {
         setBidSuccess("Bid placed successfully!");
         // Update item in local state
         setItems(prev => prev.map(item => 
-          selectedItem && item.id === selectedItem.id ? { ...item, current_bid: data.result?.new_bid || Number(amount), is_user_bidding: true } : item
+          item.id === selectedItem.id ? { ...item, current_bid: data.result?.new_bid || Number(bidAmount), is_user_bidding: true } : item
         ));
-      }    } catch (err) {
+      }
+    } catch (err) {
       setBidError('Network error occurred while bidding.');
     } finally {
       setIsBidding(false);
@@ -311,7 +369,6 @@ const ResearchView: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
-    fetchSettings();
     
     const fetchJobStatus = async () => {
       try {
@@ -464,7 +521,11 @@ const ResearchView: React.FC = () => {
     }
   };
 
-
+  const getHighResImageUrl = (url: string) => {
+    if (!url) return '';
+    // Replace typical patterns from scraping for high-res images
+    return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
+  };
 
   const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
     try {
@@ -672,146 +733,146 @@ const ResearchView: React.FC = () => {
   if (loading) return <div className="loading">Loading items...</div>;
 
   return (
-    <ViewContainer className="research-view">
-      <ViewHeader 
-        title="Auction Research" 
-        subtitle="Real-time arbitrage opportunities from top auction houses."
-        actions={
-          <>
-            {isScraping ? (
-              <div className="scrape-progress-container">
-                <div className="scrape-progress-bar-track">
-                  <div 
-                    className="scrape-progress-bar-fill"
-                    style={{ width: `${scrapeProgress.totalSteps > 0 ? (scrapeProgress.step / scrapeProgress.totalSteps) * 100 : 0}%` }}
-                  />
-                  <span className="scrape-progress-bar-label">
-                    {scrapeProgress.totalSteps > 0 ? `${Math.round((scrapeProgress.step / scrapeProgress.totalSteps) * 100)}%` : '0%'}
-                  </span>
-                </div>
-                <div className="scrape-progress-status">
-                  {scrapeProgress.message || 'Initializing scan...'}
-                </div>
+    <div className="research-view">
+      <header className="view-header">
+        <div className="header-title">
+          <h1>Auction Research</h1>
+          <p>Real-time arbitrage opportunities from top auction houses.</p>
+        </div>
+        <div className="header-actions">
+          {isScraping ? (
+            <div className="scrape-progress-container">
+              <div className="scrape-progress-bar-track">
+                <div 
+                  className="scrape-progress-bar-fill"
+                  style={{ width: `${scrapeProgress.totalSteps > 0 ? (scrapeProgress.step / scrapeProgress.totalSteps) * 100 : 0}%` }}
+                />
+                <span className="scrape-progress-bar-label">
+                  {scrapeProgress.totalSteps > 0 ? `${Math.round((scrapeProgress.step / scrapeProgress.totalSteps) * 100)}%` : '0%'}
+                </span>
               </div>
-            ) : (
-              <Tooltip text="Refresh data from all auction houses">
-                <button 
-                  className="action-btn scrape-btn"
-                  onClick={handleScrape}
-                  disabled={isScraping}
-                >
-                  <TrendingUp size={16}/>
-                  Check for New Items
-                </button>
-              </Tooltip>
-            )}
-            <Tooltip text="Update valuations for all items">
+              <div className="scrape-progress-status">
+                {scrapeProgress.message || 'Initializing scan...'}
+              </div>
+            </div>
+          ) : (
+            <Tooltip text="Refresh data from all auction houses">
               <button 
-                className="action-btn"
-                onClick={() => setIsBulkValuateModalOpen(true)}
-                disabled={bulkValuateProgress.active}
+                className="action-btn scrape-btn"
+                onClick={handleScrape}
+                disabled={isScraping}
               >
-                {bulkValuateProgress.active ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
-                {bulkValuateProgress.active ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})` : 'Update Valuations'}
+                <TrendingUp size={16}/>
+                Check for New Items
               </button>
             </Tooltip>
-          </>
-        }
-      />
+          )}
+          <Tooltip text="Update valuations for all items">
+            <button 
+              className="action-btn"
+              onClick={() => setIsBulkValuateModalOpen(true)}
+              disabled={bulkValuateProgress.active}
+            >
+              {bulkValuateProgress.active ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
+              {bulkValuateProgress.active ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})` : 'Update Valuations'}
+            </button>
+          </Tooltip>
+        </div>
+      </header>
 
-      <KpiBar>
-        <KpiCard 
-          icon={<Clock size={24} />} 
-          label="Ending Today" 
-          value={kpis.today} 
-          secondaryValue="Items"
-          active={filter === 'today'}
-          onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}
-        />
-        <KpiCard 
-          icon={<CalendarDays size={24} />} 
-          label="Ending Tomorrow" 
-          value={kpis.tomorrow} 
-          secondaryValue="Items"
-          active={filter === 'tomorrow'}
-          onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}
-        />
-        <KpiCard 
-          icon={<CalendarDays size={24} />} 
-          label="Ending This Week" 
-          value={kpis.week} 
-          secondaryValue="Items"
-          active={filter === 'week'}
-          onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}
-        />
-      </KpiBar>
+      <section className="kpi-bar">
+        <div className={`kpi-card ${filter === 'today' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}>
+          <div className="kpi-icon-wrap"><Clock size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending Today</span>
+            <span className="kpi-value">{kpis.today} <small>Items</small></span>
+          </div>
+        </div>
+        <div className={`kpi-card ${filter === 'tomorrow' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}>
+          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending Tomorrow</span>
+            <span className="kpi-value">{kpis.tomorrow} <small>Items</small></span>
+          </div>
+        </div>
+        <div className={`kpi-card ${filter === 'week' ? 'active-filter' : ''}`} onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}>
+          <div className="kpi-icon-wrap"><CalendarDays size={24} className="kpi-icon"/></div>
+          <div className="kpi-info">
+            <span className="kpi-label">Ending This Week</span>
+            <span className="kpi-value">{kpis.week} <small>Items</small></span>
+          </div>
+        </div>
+      </section>
 
       <section className="grid-section">
-        <FilterBar title="Available Items">
-          <button 
-            className="action-btn"
-            onClick={() => setViewMode(prev => prev === 'table' ? 'grid' : 'table')}
-            title="Change View"
-            style={{ padding: '0.5rem 0.75rem' }}
-          >
-            {viewMode === 'table' ? <LayoutGrid size={16} /> : <List size={16} />}
-            <span>Change View</span>
-          </button>
-          <div className="roi-setting">
-            <Target size={16} />
-            <label>Target ROI:</label>
+        <div className="saas-view-header">
+          <h1 className="saas-title">Available Items</h1>
+          <div className="saas-filters">
+            <button 
+              className="action-btn"
+              onClick={() => setViewMode(prev => prev === 'table' ? 'grid' : 'table')}
+              title="Change View"
+              style={{ padding: '0.5rem 0.75rem' }}
+            >
+              {viewMode === 'table' ? <LayoutGrid size={16} /> : <List size={16} />}
+              <span>Change View</span>
+            </button>
+            <div className="roi-setting">
+              <Target size={16} />
+              <label>Target ROI:</label>
+              <input 
+                type="number" 
+                className="roi-input"
+                value={targetRoi} 
+                onChange={(e) => setTargetRoi(Number(e.target.value))}
+                min="0"
+                max="500"
+              />
+              <span className="roi-percent">%</span>
+            </div>
+            <select 
+              className="saas-input"
+              value={auctionHouseFilter}
+              onChange={(e) => setAuctionHouseFilter(e.target.value)}
+            >
+              <option value="">All Sources</option>
+              {Object.entries(AUCTION_HOUSE_MAP).map(([id, ah]) => (
+                <option key={id} value={id}>{ah.name}</option>
+              ))}
+            </select>
             <input 
-              type="number" 
-              className="roi-input"
-              value={targetRoi} 
-              onChange={(e) => setTargetRoi(Number(e.target.value))}
-              min="0"
-              max="500"
+              type="text" 
+              className="saas-input search-input"
+              placeholder="Search title, lot, or tags..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <span className="roi-percent">%</span>
+            <select 
+              className="saas-input"
+              value={parentCategoryFilter}
+              onChange={(e) => {
+                setParentCategoryFilter(e.target.value);
+                setSubCategoryFilter('');
+              }}
+            >
+              <option value="">All Categories</option>
+              {parentCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <select 
+              className="saas-input"
+              value={subCategoryFilter}
+              onChange={(e) => setSubCategoryFilter(e.target.value)}
+              disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
+            >
+              <option value="">All Sub-Categories</option>
+              {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
           </div>
-          <select 
-            className="saas-input"
-            value={auctionHouseFilter}
-            onChange={(e) => setAuctionHouseFilter(e.target.value)}
-          >
-            <option value="">All Sources</option>
-            {Object.entries(AUCTION_HOUSE_MAP).map(([id, ah]) => (
-              <option key={id} value={id}>{ah.name}</option>
-            ))}
-          </select>
-          <input 
-            type="text" 
-            className="saas-input search-input"
-            placeholder="Search title, lot, or tags..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <select 
-            className="saas-input"
-            value={parentCategoryFilter}
-            onChange={(e) => {
-              setParentCategoryFilter(e.target.value);
-              setSubCategoryFilter('');
-            }}
-          >
-            <option value="">All Categories</option>
-            {parentCategories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          <select 
-            className="saas-input"
-            value={subCategoryFilter}
-            onChange={(e) => setSubCategoryFilter(e.target.value)}
-            disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
-          >
-            <option value="">All Sub-Categories</option>
-            {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
-              <option key={sub} value={sub}>{sub}</option>
-            ))}
-          </select>
-        </FilterBar>
+        </div>
         {viewMode === 'table' ? (
           <table className="research-table">
             <thead 
@@ -921,10 +982,7 @@ const ResearchView: React.FC = () => {
                       ) : '--'}
                     </td>
                     <td style={getColStyle('time')}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
-                        <span style={{ fontSize: '10px', opacity: 0.6 }}>{formatAuctionDate(item.end_time, timezone)}</span>
-                      </div>
+                      <CountdownTimer endTime={item.end_time} />
                     </td>
                     <td style={getColStyle('actions')}>
                       <div className="action-buttons-cell">
@@ -1003,10 +1061,7 @@ const ResearchView: React.FC = () => {
                       }}
                     />
                     <div className="watch-timer-overlay">
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
-                        <span style={{ fontSize: '9px', opacity: 0.8 }}>{formatAuctionDate(item.end_time, timezone)}</span>
-                      </div>
+                      <CountdownTimer endTime={item.end_time} />
                     </div>
                     {newItemIds.has(item.id) && (
                       <div className="new-badge-overlay grid-overlay">
@@ -1102,17 +1157,154 @@ const ResearchView: React.FC = () => {
         </button>
       )}
 
-      <ItemDetailModal 
-        item={selectedItem} 
-        isOpen={!!selectedItem} 
-        onClose={() => setSelectedItem(null)}
-        viewContext="research"
-        onPlaceBid={handlePlaceBid}
-        isBidding={isBidding}
-        bidError={bidError}
-        bidSuccess={bidSuccess}
-        userTimezone={timezone}
-      />
+      <Modal isOpen={!!selectedItem} onClose={() => setSelectedItem(null)} size="xl">
+        {selectedItem && (
+          <div className="item-detail-layout modern">
+            <div className="item-detail-image-panel-bg">
+              {selectedItem.image_url ? (
+                <img
+                  src={getHighResImageUrl(selectedItem.image_url)}
+                  alt={selectedItem.title}
+                  className="item-detail-bg-image"
+                />
+              ) : (
+                <div className="item-detail-no-image-bg">No Image Available</div>
+              )}
+            </div>
+
+            <div className="item-detail-overlay-content">
+              <div className="item-detail-content-columns">
+                {/* Left Column: Metadata & Research */}
+                <div className="item-detail-col left">
+                  <div className="item-detail-subtitle vertical">
+                    <span className="item-pill vertical time-remaining">
+                      <CalendarDays size={14}/> <CountdownTimer endTime={selectedItem.end_time} />
+                    </span>
+                    <span className="item-pill vertical lot-number">Lot #{selectedItem.lot_number}</span>
+                    {selectedItem.category && (
+                      <span className="item-pill vertical category" title={selectedItem.category}>
+                        <LayoutGrid size={14}/> <span className="truncate">{selectedItem.category}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedItem.valuation && (
+                    <div className="detail-section">
+                      <h3>Research Info</h3>
+                      <div className="detail-grid">
+                        <div className="detail-item-custom">
+                          <div className="research-query-header">Search Query</div>
+                          <div className="research-query-term">{selectedItem.valuation.search_query}</div>
+                        </div>
+                        <div className="detail-item">
+                          <span className="label">Sample Size</span>
+                          <span className="value">{selectedItem.valuation.sample_size || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="item-detail-spacer"></div>
+
+                  {selectedItem.tags && normalizeTags(selectedItem.tags).length > 0 && (
+                    <div className="detail-section no-header">
+                      <div className="tags-pill-container">
+                        {normalizeTags(selectedItem.tags).map((tag, idx) => (
+                          <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
+                            {tag.value}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Center Column: High-Res Image & Title Overlay */}
+                <div className="item-detail-col center">
+                  <div className="item-detail-title-card">
+                    <h2>{selectedItem.title}</h2>
+                  </div>
+                  {selectedItem.image_url ? (
+                    <img
+                      src={getHighResImageUrl(selectedItem.image_url)}
+                      alt={selectedItem.title}
+                      className="item-detail-center-image"
+                    />
+                  ) : (
+                    <div className="item-detail-no-image-bg">No Image Available</div>
+                  )}
+                </div>
+
+                {/* Right Column: ROI, Stats, and Actions */}
+                <div className="item-detail-col right">
+                  <div className="item-detail-kpi-tile bid">
+                    <div className="kpi-label">Current Bid</div>
+                    <div className="kpi-value">${selectedItem.current_bid?.toFixed(2)}</div>
+                  </div>
+
+                  <div className="detail-section">
+                    <h3>Bidding & Value</h3>
+                    <div className="detail-grid">
+                      {selectedItem.valuation && (
+                        <>
+                          <div className="detail-item">
+                            <span className="label">Est. Value</span>
+                            <span className="value text-emerald-500">${selectedItem.valuation.est_market_value?.toFixed(2)}</span>
+                          </div>
+                          <div className="detail-item">
+                            <span className="label">Max Bid</span>
+                            <span className="value text-blue-500">${selectedItem.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="detail-section no-header">
+                    <div className="item-detail-bid-section-modern">
+                      <div className="bid-input-group">
+                        <span className="currency-symbol">$</span>
+                        <input 
+                          type="number" 
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          className="modern-bid-input"
+                          placeholder={`Min: $${(selectedItem.current_bid + 1).toFixed(0)}`}
+                          disabled={isBidding}
+                        />
+                        <button 
+                          className="modern-bid-btn" 
+                          onClick={handlePlaceBid} 
+                          disabled={isBidding || !bidAmount}
+                        >
+                          {isBidding ? <Loader2 size={16} className="spinning" /> : 'Bid'}
+                        </button>
+                      </div>
+                      {bidError && <div className="bid-msg error">{bidError}</div>}
+                      {bidSuccess && <div className="bid-msg success">{bidSuccess}</div>}
+                    </div>
+
+                    <div className="action-row" style={{ marginTop: '12px' }}>
+                      <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
+                        View Full Auction <ExternalLink size={14} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {selectedItem.valuation && (
+                    <div className="item-detail-kpi-tile roi">
+                      <div className="kpi-label">ROI</div>
+                      <div className="kpi-value">
+                        {selectedItem.valuation.target_roi_pct ? `${Math.round(selectedItem.valuation.target_roi_pct)}%` : '--'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal isOpen={isBulkValuateModalOpen} onClose={() => setIsBulkValuateModalOpen(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1135,7 +1327,7 @@ const ResearchView: React.FC = () => {
           </div>
         </div>
       </Modal>
-    </ViewContainer>
+    </div>
   );
 };
 

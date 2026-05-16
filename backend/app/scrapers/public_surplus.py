@@ -110,7 +110,7 @@ class PublicSurplusScraper(BaseScraper):
                             "description": f"Public Surplus Item #{auc_id}",
                             "price": price,
                             "current_bid": price,
-                            "end_time": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(), # Default end time if we can't parse it
+                            "end_time": None, # Should be parsed from the search results if possible
                             "status": "open",
                             "url": f"{self.base_url}{href}",
                             "primary_image": {"url": image_url} if image_url else None
@@ -228,10 +228,22 @@ class PublicSurplusScraper(BaseScraper):
                         user_bid = parse_price(cols[6].get_text())
                         proxy_bid = parse_price(cols[7].get_text())
                         
+                        # Try to parse end_time
+                        end_time_val = end_date
+                        is_closed = "closed" in end_date.lower() or "ended" in end_date.lower()
+                        for fmt in ["%b %d, %Y %I:%M %p", "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M"]:
+                            try:
+                                dt = datetime.strptime(end_date, fmt)
+                                end_time_val = dt.isoformat()
+                                break
+                            except:
+                                continue
+
                         bidding_data.append({
                             "id": auc_id,
                             "title": title,
-                            "end_time": end_date,
+                            "end_time": end_time_val,
+                            "status": "closed" if is_closed else "open",
                             "current_bid": current_bid,
                             "user_bid": user_bid,
                             "proxy_bid": proxy_bid
@@ -243,3 +255,27 @@ class PublicSurplusScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error fetching Public Surplus my bids: {e}")
                 raise
+
+    async def fetch_lot_image(self, auc_id: str) -> str:
+        url = f"{self.base_url}/sms/auction/view?auc={auc_id}"
+        async with httpx.AsyncClient(headers=self.headers, timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                # Public Surplus image selector for auction lots
+                img_tag = soup.select_one('img.img-thumbnail, img[src*="/sms/docviewer/aucdoc/"]')
+                if img_tag:
+                    url = img_tag.get('src')
+                    if url:
+                        # Ensure we get a reasonably sized image, not just a tiny thumb
+                        if 'thumb=b' in url:
+                            url = url.replace('thumb=b', 'thumb=n')
+                        if not url.startswith('http'):
+                            url = self.base_url + url
+                        return url
+        return None
+
+    async def close(self):
+        # The AsyncClient context manager is used in methods, nothing to close here specifically
+        # unless we move to a persistent self.client.
+        pass

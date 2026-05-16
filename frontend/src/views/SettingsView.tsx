@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './SettingsView.css';
 
 const CATEGORIES = [
+  { id: 'regional', label: 'Regional Settings' },
   { id: 'app_access', label: 'Application Access' },
   { id: 'ebay', label: 'eBay Credentials' },
   { id: 'external_apis', label: 'External APIs' },
@@ -17,6 +18,17 @@ const CATEGORIES = [
       { id: 'ah_dickensheet', label: 'Dickensheet' },
     ]
   }
+];
+
+const TIMEZONES = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Phoenix', label: 'Mountain Standard (MST - No DST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time' },
+  { value: 'UTC', label: 'UTC' }
 ];
 
 const SettingsView: React.FC = () => {
@@ -35,6 +47,8 @@ const SettingsView: React.FC = () => {
     public_surplus_username: '', public_surplus_password: '', public_surplus_cookie: '',
     dickensheet_username: '', dickensheet_password: '', dickensheet_cookie: '',
     app_admin_username: '', app_admin_password: '',
+    user_timezone: 'America/Denver', // Default
+    description_template: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -130,7 +144,7 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
   };
@@ -194,6 +208,41 @@ const SettingsView: React.FC = () => {
       </div>
 
       <div className="settings-content">
+        {activeCategory === 'regional' && (
+          <div className="settings-section">
+            <h2>Regional Settings</h2>
+            <div className="form-group">
+              <label htmlFor="user_timezone">Display Timezone</label>
+              <p className="text-sm text-gray-500 mb-2">
+                All auction end times and events will be displayed in this timezone.
+              </p>
+              <select
+                id="user_timezone"
+                name="user_timezone"
+                value={settings.user_timezone || 'America/Denver'}
+                onChange={handleChange}
+                className="saas-input"
+                style={{ width: '100%', maxWidth: '400px', backgroundColor: 'white', border: '1px solid #d1d5db', borderRadius: '0.375rem', padding: '0.5rem' }}
+              >
+                {TIMEZONES.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+            </div>
+            <button 
+              className="save-btn mt-4" 
+              onClick={() => {
+                saveSettings(['user_timezone'], 'regional');
+                // Persist locally for immediate use without page refresh if needed
+                localStorage.setItem('user_timezone', settings.user_timezone);
+              }}
+              disabled={saving === 'regional'}
+            >
+              {saving === 'regional' ? 'Saving...' : 'Save Regional Settings'}
+            </button>
+          </div>
+        )}
+
         {activeCategory === 'app_access' && (
           <div className="settings-section">
             <h2>Application Access</h2>

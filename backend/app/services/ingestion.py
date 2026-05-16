@@ -37,9 +37,8 @@ async def _process_item_tags(item_to_process: Item, description: str, category_i
     # If the brand was extracted but missing from the structured tags, add it
     if brand and "Brand" not in tags:
         tags["Brand"] = brand
-        
-    return structured_category, tags, brand, classification['search_queries']
 
+    return structured_category, tags, brand, classification['search_queries'], classification.get('normalized_condition_id', '3000')
 async def ingest_auctioneer_software(db: Session, base_url: str, website_key: str, name: str, buyer_premium: float, progress: dict = None):
     """
     Orchestrates the scraping and ingestion of data from an Auctioneer Software platform.
@@ -157,6 +156,12 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 image_url = None
                 if isinstance(primary_image, dict):
                     image_url = primary_image.get('small') or primary_image.get('thumb') or primary_image.get('url')
+                
+                if image_url and not image_url.startswith('http'):
+                    if image_url.startswith('//'):
+                        image_url = f"https:{image_url}"
+                    else:
+                        image_url = f"{base_url.rstrip('/')}/{image_url.lstrip('/')}"
 
                 # 2. Check if user is bidding
                 is_user_bidding = False
@@ -231,7 +236,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                 
                 results = await asyncio.gather(*tasks)
                 
-                for j, (cat_name, tags, brand, search_queries) in enumerate(results):
+                for j, (cat_name, tags, brand, search_queries, normalized_condition_id) in enumerate(results):
                     db_item = batch[j][0]
                     # Update category to a human readable name if LLM or our map improved it
                     db_item.category = cat_name
@@ -239,6 +244,7 @@ async def ingest_auctioneer_software(db: Session, base_url: str, website_key: st
                     if brand:
                         db_item.brand = brand
                     db_item.search_queries = search_queries
+                    db_item.normalized_condition_id = normalized_condition_id
                 
                 db.commit()
                 
@@ -370,6 +376,7 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
                 else:
                     item.current_bid = lot.get('current_bid', item.current_bid)
                     item.last_seen_at = datetime.now(timezone.utc)
+                    item.is_user_bidding = is_user_bidding # Update in case we started bidding
                     items_count += 1
                     
             db.commit()
@@ -389,13 +396,14 @@ async def ingest_public_surplus(db: Session, progress: dict = None):
                 
                 results = await asyncio.gather(*tasks)
                 
-                for j, (cat_name, tags, brand, search_queries) in enumerate(results):
+                for j, (cat_name, tags, brand, search_queries, normalized_condition_id) in enumerate(results):
                     db_item = batch[j][0]
                     db_item.category = cat_name
                     db_item.tags = tags
                     if brand:
                         db_item.brand = brand
                     db_item.search_queries = search_queries
+                    db_item.normalized_condition_id = normalized_condition_id
                 
                 db.commit()
                 
@@ -586,13 +594,14 @@ async def ingest_bidwrangler(db: Session, base_url: str, website_key: str, name:
                 
                 results = await asyncio.gather(*tasks)
                 
-                for j, (cat_name, tags, brand, search_queries) in enumerate(results):
+                for j, (cat_name, tags, brand, search_queries, normalized_condition_id) in enumerate(results):
                     db_item = batch[j][0]
                     db_item.category = cat_name
                     db_item.tags = tags
                     if brand:
                         db_item.brand = brand
                     db_item.search_queries = search_queries
+                    db_item.normalized_condition_id = normalized_condition_id
                 
                 db.commit()
                 

@@ -209,39 +209,3 @@
 .bold {
   font-weight: 700;
 }
-
-.small-btn {
-  background: #fff;
-  color: #374151;
-  border: 1px solid #E5E7EB;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.75rem;
-  transition: all 0.2s ease;
-}
-
-.small-btn:hover {
-  background: #F9FAFB;
-}
-
-/* Header Section */
-.view-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.header-title h1 {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: #374151;
-  margin-bottom: 0.25rem;
-}
-
-.header-title p {
-  color: #6B7280;
-  font-size: 0.9rem;
-}

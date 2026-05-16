@@ -217,16 +217,12 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     premium = auction_house.buyer_premium_pct if auction_house and auction_house.buyer_premium_pct else 0.0
 
     # 1. Extract queries and metadata
-    val_meta = await generate_valuation_data(item.title, item.description, item.category or "")
-    
-    if val_meta.get("category") == "Unknown" and item.image_url:
-        logger.info(f"Category unknown for '{item.title}' in valuation, retrying with image evaluation...")
-        val_meta = await generate_valuation_data(
-            item.title,
-            item.description,
-            item.category or "",
-            image_url=item.image_url
-        )
+    val_meta = await generate_valuation_data(
+        item.title, 
+        item.description, 
+        item.category or "",
+        image_url=item.image_url
+    )
         
     queries = val_meta.get("search_queries", [item.title[:50]])
     if not queries:

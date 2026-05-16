@@ -149,11 +149,31 @@ class AuctioneerSoftwareScraper(BaseScraper):
         for key, value in state.items():
             if key.startswith("AuctionLot."):
                 lot_id = key.split(".")[1]
-                # Ensure we have a dict and inject the id if missing
                 if isinstance(value, dict):
                     lot_data = value.copy()
                     if 'id' not in lot_data:
                         lot_data['id'] = lot_id
+                    
+                    # Resolve primary_image reference
+                    p_img = lot_data.get("primary_image") or lot_data.get("primaryImage")
+                    if isinstance(p_img, dict) and "__ref" in p_img:
+                        ref_key = p_img["__ref"]
+                        if ref_key in state:
+                            lot_data["primary_image"] = state[ref_key]
+                    
+                    # Resolve images list references
+                    imgs = lot_data.get("images")
+                    if isinstance(imgs, list):
+                        resolved_imgs = []
+                        for img_ref in imgs:
+                            if isinstance(img_ref, dict) and "__ref" in img_ref:
+                                r_key = img_ref["__ref"]
+                                if r_key in state:
+                                    resolved_imgs.append(state[r_key])
+                            else:
+                                resolved_imgs.append(img_ref)
+                        lot_data["images"] = resolved_imgs
+
                     lots.append(lot_data)
         return lots
 
@@ -229,6 +249,20 @@ class AuctioneerSoftwareScraper(BaseScraper):
             raise PermissionError("Not authenticated. Call login() first.")
             
         raise NotImplementedError("Direct bidding structure not fully mapped for Auctioneer Software yet.")
+
+    async def fetch_lot_image(self, auction_id: str, lot_id: str) -> str:
+        url = f"{self.base_url}/auctions/{auction_id}/lot/{lot_id}"
+        resp = await self.client.get(url)
+        if resp.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            img_tag = soup.select_one('img.lot-image, .lot-details-gallery img, [property="og:image"]')
+            if img_tag:
+                url = img_tag.get('src') or img_tag.get('content')
+                if url and not url.startswith('http'):
+                    url = self.base_url + url
+                return url
+        return None
 
     async def close(self):
         await self.client.aclose()

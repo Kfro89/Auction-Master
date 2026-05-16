@@ -1,17 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
+from datetime import datetime, timezone
 from ..database import get_db
-from ..models import Item, Valuation, EbaySampleCache
+from ..models import Item, Valuation, EbaySampleCache, Setting
 from ..auth import get_current_user
+from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
+from ..scrapers.public_surplus import PublicSurplusScraper
+from ..scrapers.bid_wrangler import BidWranglerApiScraper
+from ..services.security import decrypt_value, get_ebay_credentials
+from ..services.ebay_auth import EbayAuthClient
+from ..services.ebay_browse import EbayBrowseClient
 
 router = APIRouter()
 
 class WatchStatusUpdate(BaseModel):
     is_watched: bool
 
+class BidRequest(BaseModel):
+    amount: float
+
+class MarginUpdate(BaseModel):
+    target_roi_pct: float
+
 def serialize_item(item: Item) -> dict:
+    base_url = item.auction_house.base_url.rstrip("/") if item.auction_house else ""
+    
+    def ensure_absolute(url):
+        if not url: return url
+        if url.startswith("http"): return url
+        if url.startswith("//"): return f"https:{url}"
+        return f"{base_url}/{url.lstrip('/')}"
+
+    image_url = ensure_absolute(item.image_url)
+    images = [ensure_absolute(img) for img in getattr(item, 'images', [])] if getattr(item, 'images', None) else []
+
     item_dict = {
         "id": item.id,
         "title": item.title,
@@ -20,7 +44,8 @@ def serialize_item(item: Item) -> dict:
         "end_time": item.end_time,
         "status": item.status,
         "url": item.url,
-        "image_url": item.image_url,
+        "image_url": image_url,
+        "images": images,
         "auction_house_id": item.auction_house_id,
         "auction_house_key": item.auction_house.website_key if item.auction_house else None,
         "auction_house_name": item.auction_house.name if item.auction_house else None,
@@ -61,11 +86,29 @@ def serialize_item(item: Item) -> dict:
         item_dict["valuation"] = val_dict
         
     if getattr(item, "user_bids", None):
+        user_bid_status = item.user_bids.user_bid_status
+        
+        # Infer won/loss if the auction is over
+        is_over = item.status == "closed"
+        if not is_over and item.end_time:
+            now = datetime.now(timezone.utc)
+            # Handle naive vs aware comparison
+            if item.end_time.tzinfo is None:
+                now = now.replace(tzinfo=None)
+            if item.end_time <= now:
+                is_over = True
+                
+        if is_over:
+            if user_bid_status == "winning":
+                user_bid_status = "won"
+            elif user_bid_status in ["outbid", "outbid_near"]:
+                user_bid_status = "lost"
+
         item_dict["user_bids"] = {
             "current_bid_amount": item.user_bids.current_bid_amount,
             "user_bid_amount": item.user_bids.user_bid_amount,
             "user_proxy_bid": item.user_bids.user_proxy_bid,
-            "user_bid_status": item.user_bids.user_bid_status,
+            "user_bid_status": user_bid_status,
             "updated_at": item.user_bids.updated_at
         }
         
@@ -80,7 +123,7 @@ async def list_items(db: Session = Depends(get_db), current_user: str = Depends(
         joinedload(Item.auction_house),
         joinedload(Item.user_bids)
     ).filter(
-        (Item.end_time >= func.now()) | (Item.end_time.is_(None))
+        (Item.end_time >= func.now()) | (Item.end_time.is_(None)) | (Item.is_user_bidding == True)
     ).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]
 
@@ -112,16 +155,6 @@ async def get_watchlist(
         joinedload(Item.user_bids)
     ).filter(Item.is_watched.is_(True)).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]
-
-from pydantic import BaseModel
-class BidRequest(BaseModel):
-    amount: float
-
-from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
-from ..scrapers.public_surplus import PublicSurplusScraper
-from ..scrapers.bid_wrangler import BidWranglerApiScraper
-from ..services.security import decrypt_value
-from ..models import Setting
 
 @router.post("/{item_id}/bid")
 async def place_bid(
@@ -188,3 +221,98 @@ async def place_bid(
     finally:
         if hasattr(scraper, 'close'):
             await scraper.close()
+
+@router.get("/{item_id}/comparables")
+async def get_comparables(item_id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    search_queries = getattr(item, 'search_queries', [])
+    if not search_queries:
+        search_query = item.title[:50]
+    else:
+        search_query = search_queries[0]
+
+    client_id, client_secret = get_ebay_credentials(db)
+    auth_client = EbayAuthClient(client_id, client_secret)
+    browse_client = EbayBrowseClient(auth_client)
+
+    condition_ids = ["3000"]
+    if getattr(item, "normalized_condition_id", None):
+        condition_ids = [item.normalized_condition_id]
+    elif getattr(item, "vehicle_year", None):
+        condition_ids = ["3000"] # Vehicles are almost always used
+    else:
+        condition_ids = ["1000", "2000", "3000"]
+    
+    try:
+        results = await browse_client.search_active_listings(query=search_query, condition_ids=condition_ids)
+        item_summaries = results.get("itemSummaries", [])[:20]
+        
+        # Calculate price metrics
+        prices = [float(listing.get("price", {}).get("value", 0)) for listing in item_summaries if listing.get("price", {}).get("value")]
+        avg_price = sum(prices) / len(prices) if prices else 0
+        median_price = sorted(prices)[len(prices)//2] if prices else 0
+        price_low = min(prices) if prices else 0
+        price_high = max(prices) if prices else 0
+        
+        mapped_listings = []
+        for listing in item_summaries:
+            condition = "Unknown"
+            if "condition" in listing:
+                # Sometimes condition is a string, sometimes a dict
+                if isinstance(listing["condition"], dict):
+                     condition = listing["condition"].get("conditionDisplayName", "Unknown")
+                else:
+                     condition = str(listing["condition"])
+                     
+            mapped_listings.append({
+                "title": listing.get("title", ""),
+                "price": listing.get("price", {}).get("value", "0.00"),
+                "url": listing.get("itemWebUrl", ""),
+                "condition": condition
+            })
+
+        return {
+            "avg_asking_price": avg_price,
+            "median_asking_price": median_price,
+            "price_range_low": price_low,
+            "price_range_high": price_high,
+            "sample_listings": mapped_listings
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch comparables: {str(e)}")
+
+class MarginUpdate(BaseModel):
+    target_roi_pct: float
+
+@router.patch("/{item_id}/valuation/margin")
+async def update_valuation_margin(
+    item_id: int,
+    margin_req: MarginUpdate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    item = db.query(Item).options(joinedload(Item.valuation)).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    valuation = item.valuation
+    if not valuation:
+        raise HTTPException(status_code=400, detail="Item has no valuation to update")
+        
+    valuation.target_roi_pct = margin_req.target_roi_pct
+    
+    # Recalculate max_bid_for_target_roi
+    # Formula: (est_market_value * 0.85 * (1 - target_roi_pct)) - shipping_cost_est
+    est_market_value = valuation.est_market_value or 0.0
+    shipping_cost_est = item.shipping_cost_est or 0.0
+    
+    valuation.max_bid_for_target_roi = (est_market_value * 0.85 * (1 - valuation.target_roi_pct)) - shipping_cost_est
+    valuation.max_bid_for_target_roi = max(0.0, valuation.max_bid_for_target_roi)
+    
+    db.commit()
+    db.refresh(valuation)
+    
+    return serialize_item(item)

@@ -16,6 +16,32 @@ export const normalizeTags = (tags: any): { key: string | null, value: string, f
 };
 
 export const getHighResImageUrl = (url: string) => {
-  if (!url) return '';
-  return url.replace(/\/(?:small|thumb)\//i, '/large/').replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
+  if (!url || url.startsWith('data:')) return url || '';
+  
+  // Only attempt to replace if it contains small/thumb indicators
+  // to avoid breaking random absolute URLs that happen to have these words in other parts
+  const hasSmallIndicator = /\/(?:small|thumb)\//i.test(url) || /[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i.test(url);
+  
+  if (!hasSmallIndicator) return url;
+
+  return url
+    .replace(/\/(?:small|thumb)\//i, '/large/')
+    .replace(/[_-](?:small|thumb)(\.[a-zA-Z0-9]+)$/i, '_large$1');
 };
+
+export const formatAuctionDate = (dateString: string | null | undefined, timezone?: string) => {
+  if (!dateString) return '--';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '--';
+
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone || undefined,
+  };
+
+  return new Intl.DateTimeFormat('en-US', options).format(date);
+};
+

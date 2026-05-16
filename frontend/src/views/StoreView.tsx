@@ -1,26 +1,7 @@
 import React from 'react';
 import './StoreView.css';
-
-interface KPICardProps {
-  title: string;
-  value: string;
-  trend?: string;
-  isPositive?: boolean;
-}
-
-const KPICard: React.FC<KPICardProps> = ({ title, value, trend, isPositive }) => (
-  <div className="kpi-card glass">
-    <div className="kpi-info">
-      <span className="kpi-title">{title}</span>
-      <h2 className="kpi-value">{value}</h2>
-      {trend && (
-        <span className={`kpi-trend ${isPositive ? 'positive' : 'negative'}`}>
-          {isPositive ? '▲' : '▼'} {trend}
-        </span>
-      )}
-    </div>
-  </div>
-);
+import { ViewContainer, ViewHeader, KpiBar, KpiCard } from '../components/layout/ViewLayout';
+import { DollarSign, BarChart3, PieChart, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 interface ListItemProps {
   image: string;
@@ -62,20 +43,38 @@ const StoreView: React.FC = () => {
   ];
 
   return (
-    <div className="store-view">
-      <header className="view-header">
-        <div className="header-title">
-          <h1>Store Dashboard</h1>
-          <p>EBay inventory and performance analytics.</p>
-        </div>
-      </header>
+    <ViewContainer className="store-view">
+      <ViewHeader 
+        title="Store Dashboard" 
+        subtitle="EBay inventory and performance analytics."
+      />
 
-      <section className="kpi-grid">
-        <KPICard title="Total Inventory Value" value="$142,580" trend="5.2%" isPositive={true} />
-        <KPICard title="Sales (30d)" value="$12,450" trend="12.1%" isPositive={true} />
-        <KPICard title="Sales (90d)" value="$38,200" trend="2.4%" isPositive={false} />
-        <KPICard title="Sales (YTD)" value="$156,840" trend="18.5%" isPositive={true} />
-      </section>
+      <KpiBar>
+        <KpiCard 
+          icon={<DollarSign size={24} />} 
+          label="Total Inventory Value" 
+          value="$142,580" 
+          secondaryValue={<span className="text-emerald-500 flex items-center gap-1"><ArrowUpRight size={14}/> 5.2%</span>}
+        />
+        <KpiCard 
+          icon={<BarChart3 size={24} />} 
+          label="Sales (30d)" 
+          value="$12,450" 
+          secondaryValue={<span className="text-emerald-500 flex items-center gap-1"><ArrowUpRight size={14}/> 12.1%</span>}
+        />
+        <KpiCard 
+          icon={<PieChart size={24} />} 
+          label="Sales (90d)" 
+          value="$38,200" 
+          secondaryValue={<span className="text-rose-500 flex items-center gap-1"><ArrowDownRight size={14}/> 2.4%</span>}
+        />
+        <KpiCard 
+          icon={<Calendar size={24} />} 
+          label="Sales (YTD)" 
+          value="$156,840" 
+          secondaryValue={<span className="text-emerald-500 flex items-center gap-1"><ArrowUpRight size={14}/> 18.5%</span>}
+        />
+      </KpiBar>
 
       <section className="middle-section">
         <div className="glass-panel shipment-panel">
@@ -129,8 +128,9 @@ const StoreView: React.FC = () => {
           </table>
         </div>
       </section>
-    </div>
+    </ViewContainer>
   );
 };
 
 export default StoreView;
+
