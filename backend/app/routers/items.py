@@ -18,6 +18,9 @@ router = APIRouter()
 class WatchStatusUpdate(BaseModel):
     is_watched: bool
 
+class ArchiveStatusUpdate(BaseModel):
+    is_archived: bool
+
 class BidRequest(BaseModel):
     amount: float
 
@@ -52,6 +55,7 @@ def serialize_item(item: Item) -> dict:
         "category": item.category,
         "tags": item.tags,
         "is_watched": getattr(item, 'is_watched', False),
+        "is_archived": getattr(item, 'is_archived', False),
         "is_user_bidding": getattr(item, 'is_user_bidding', False),
         "vin": getattr(item, 'vin', None),
         "vehicle_year": getattr(item, 'vehicle_year', None),
@@ -115,14 +119,19 @@ def serialize_item(item: Item) -> dict:
     return item_dict
 
 @router.get("/")
-async def list_items(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def list_items(show_archived: bool = False, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     from sqlalchemy.sql import func
     # Fetch items with their valuations and auction house, filtering out expired ones
-    items = db.query(Item).options(
+    query = db.query(Item).options(
         joinedload(Item.valuation).joinedload(Valuation.sample_cache).joinedload(EbaySampleCache.valuation_detail), 
         joinedload(Item.auction_house),
         joinedload(Item.user_bids)
-    ).filter(
+    )
+    
+    if not show_archived:
+        query = query.filter(Item.is_archived == False)
+        
+    items = query.filter(
         (Item.end_time >= func.now()) | (Item.end_time.is_(None)) | (Item.is_user_bidding == True)
     ).order_by(Item.end_time.asc()).all()
     return [serialize_item(item) for item in items]
@@ -143,6 +152,23 @@ async def toggle_watch_status(
     db.refresh(item)
     
     return {"id": item.id, "is_watched": item.is_watched}
+
+@router.patch("/{item_id}/archive")
+async def toggle_archive_status(
+    item_id: int,
+    status: ArchiveStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    item.is_archived = status.is_archived
+    db.commit()
+    db.refresh(item)
+    
+    return {"id": item.id, "is_archived": item.is_archived}
 
 @router.get("/watchlist")
 async def get_watchlist(
