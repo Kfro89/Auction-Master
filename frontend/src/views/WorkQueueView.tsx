@@ -36,6 +36,9 @@ interface InventoryItem {
   height?: number;
   storage_location?: string;
   tracking_number?: string;
+  shipping_method?: string;
+  local_pickup_address?: string;
+  local_pickup_deadline?: string;
   qr_code_url?: string;
   cost_line_items?: CostLineItem[];
 }
@@ -275,22 +278,61 @@ const WorkQueueView: React.FC = () => {
                     </div>
                   )}
 
-                  {(selectedItem.status === 'TRANSIT_VENDOR' || selectedItem.status === 'TRANSIT_LOCAL') && (
+                  {(selectedItem.status === 'PAID' || selectedItem.status === 'TRANSIT_VENDOR' || selectedItem.status === 'TRANSIT_LOCAL') && (
                     <div className="glass-panel p-4 bg-blue-500/5 border-blue-500/20">
                       <h3 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
                         <Truck size={16} /> Logistics
                       </h3>
                       <div className="space-y-4">
-                        <div className="field-group">
-                          <label className="text-xs text-gray-400">Carrier Tracking</label>
-                          <input 
-                            type="text" 
-                            className="frosted-input w-full mt-1"
-                            placeholder="Tracking #"
-                            value={selectedItem.tracking_number || ''}
-                            onChange={e => handleUpdateItem(selectedItem.id, { tracking_number: e.target.value })}
-                          />
+                        <div className="flex gap-2">
+                          <button 
+                            className={`flex-1 py-2 rounded text-xs border ${(!selectedItem.shipping_method || selectedItem.shipping_method === 'vendor') ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-gray-400'}`}
+                            onClick={() => handleUpdateItem(selectedItem.id, { shipping_method: 'vendor' })}
+                          >
+                            Awaiting Vendor Shipment
+                          </button>
+                          <button 
+                            className={`flex-1 py-2 rounded text-xs border ${(selectedItem.shipping_method === 'local') ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-gray-400'}`}
+                            onClick={() => handleUpdateItem(selectedItem.id, { shipping_method: 'local' })}
+                          >
+                            Awaiting Local Pickup
+                          </button>
                         </div>
+                        
+                        {(!selectedItem.shipping_method || selectedItem.shipping_method === 'vendor') ? (
+                          <div className="field-group">
+                            <label className="text-xs text-gray-400">Carrier Tracking</label>
+                            <input 
+                              type="text" 
+                              className="frosted-input w-full mt-1"
+                              placeholder="Tracking #"
+                              value={selectedItem.tracking_number || ''}
+                              onChange={e => handleUpdateItem(selectedItem.id, { tracking_number: e.target.value })}
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="field-group">
+                              <label className="text-xs text-gray-400">Physical Address</label>
+                              <input 
+                                type="text" 
+                                className="frosted-input w-full mt-1"
+                                placeholder="Pickup Address"
+                                value={selectedItem.local_pickup_address || ''}
+                                onChange={e => handleUpdateItem(selectedItem.id, { local_pickup_address: e.target.value })}
+                              />
+                            </div>
+                            <div className="field-group">
+                              <label className="text-xs text-gray-400">Pickup Deadline</label>
+                              <input 
+                                type="date" 
+                                className="frosted-input w-full mt-1"
+                                value={selectedItem.local_pickup_deadline ? selectedItem.local_pickup_deadline.split('T')[0] : ''}
+                                onChange={e => handleUpdateItem(selectedItem.id, { local_pickup_deadline: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                              />
+                            </div>
+                          </>
+                        )}
                         <button 
                           className="action-btn outline w-full justify-center"
                           onClick={() => handleUpdateItem(selectedItem.id, { status: 'RECEIVED' })}

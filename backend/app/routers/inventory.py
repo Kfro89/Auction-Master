@@ -34,6 +34,9 @@ class InventoryItemUpdate(BaseModel):
     height: Optional[float] = None
     storage_location: Optional[str] = None
     tracking_number: Optional[str] = None
+    shipping_method: Optional[str] = None
+    local_pickup_address: Optional[str] = None
+    local_pickup_deadline: Optional[datetime.datetime] = None
 
 class LotSplitRequest(BaseModel):
     split_count: int = 1

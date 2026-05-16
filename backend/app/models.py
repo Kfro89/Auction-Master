@@ -160,6 +160,9 @@ class InventoryItem(Base):
     storage_location = Column(String)
     tracking_number = Column(String)
     qr_code_url = Column(String)
+    shipping_method = Column(String, default="vendor") # vendor or local
+    local_pickup_address = Column(String)
+    local_pickup_deadline = Column(DateTime(timezone=True))
 
     # Relationships
     parent_lot = relationship("InventoryParentLot", back_populates="items")
