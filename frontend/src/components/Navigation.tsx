@@ -28,6 +28,7 @@ const Navigation: React.FC<NavProps> = ({ activeTab, onTabChange }) => {
     { id: 'watchlist', label: 'Watch List' },
     { id: 'bidding', label: 'Bidding' },
     { id: 'work-queue', label: 'Work Queue' },
+    { id: 'fulfillment', label: 'Fulfillment' },
     { id: 'store', label: 'Store' },
     { id: 'ledger', label: 'Ledger' },
     { id: 'settings', label: 'Settings' },
@@ -52,3 +53,4 @@ const Navigation: React.FC<NavProps> = ({ activeTab, onTabChange }) => {
 };
 
 export default Navigation;
+ion;

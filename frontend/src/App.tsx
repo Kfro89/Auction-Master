@@ -45,6 +45,8 @@ function App() {
         return <BiddingView />;
       case 'work-queue':
         return <WorkQueueView />;
+      case 'fulfillment':
+        return <FulfillmentView />;
       case 'store':
         return <StoreView />;
       case 'ledger':
