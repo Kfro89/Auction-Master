@@ -11,6 +11,8 @@ import StoreView from './views/StoreView';
 import LedgerView from './views/LedgerView';
 import LoginView from './views/LoginView';
 import WatchListView from './views/WatchListView';
+import RmaView from './views/RmaView';
+import { FulfillmentView } from './views/FulfillmentView';
 import { CommandProvider } from './contexts/CommandContext';
 
 function App() {
@@ -47,6 +49,8 @@ function App() {
         return <WorkQueueView />;
       case 'fulfillment':
         return <FulfillmentView />;
+      case 'rma':
+        return <RmaView />;
       case 'store':
         return <StoreView />;
       case 'ledger':
