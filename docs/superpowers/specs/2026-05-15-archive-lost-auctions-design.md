@@ -24,6 +24,7 @@ The goal is to allow users to archive lost auctions from the Bidding View dashbo
 ## UI Changes (BiddingView.tsx)
 - **Archive Action:** Add an "Archive" button (icon-only, e.g., `Archive` or `X`) to each row in the bidding grid, but only show it if the item's status is "lost".
 - **View Toggle:** Add a "View Archived" button/toggle in the ViewHeader or FilterBar.
+- **KPI Exclusion:** Update the `totalCurrentBids`, `totalUserBids`, and `totalMaxExposure` calculations to skip items where `is_archived` is true, ensuring metrics reflect active auctions only.
 - **State Management:**
     - New state `showArchived` (boolean) to track which items to display.
     - Update `fetchItems` to pass the `show_archived` parameter based on state.
