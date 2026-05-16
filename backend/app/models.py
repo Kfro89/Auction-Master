@@ -150,6 +150,63 @@ class InventoryItem(Base):
     status = Column(String, default='staged') # staged, listed, sold
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
 
+    # New fields for Work Queue Phase 1
+    parent_lot_id = Column(Integer, ForeignKey("inventory_parent_lots.id"), nullable=True)
+    weight = Column(Float)
+    length = Column(Float)
+    width = Column(Float)
+    height = Column(Float)
+    storage_location = Column(String)
+    tracking_number = Column(String)
+    qr_code_url = Column(String)
+
+    # Relationships
+    parent_lot = relationship("InventoryParentLot", back_populates="items")
+    cost_line_items = relationship("InventoryCostLineItem", back_populates="inventory_item")
+
+
+class InventoryParentLot(Base):
+    __tablename__ = "inventory_parent_lots"
+    id = Column(Integer, primary_key=True, index=True)
+    source_item_id = Column(Integer, ForeignKey("items.id"), nullable=True)
+    title = Column(String, nullable=False)
+    hammer_price = Column(Float, default=0.0)
+    buyer_premium_pct = Column(Float, default=0.0)
+    tax_rate = Column(Float, default=0.0)
+    misc_fees = Column(Float, default=0.0)
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    
+    items = relationship("InventoryItem", back_populates="parent_lot")
+    cost_line_items = relationship("InventoryCostLineItem", back_populates="parent_lot")
+
+
+class InventoryCostLineItem(Base):
+    __tablename__ = "inventory_cost_line_items"
+    id = Column(Integer, primary_key=True, index=True)
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=True)
+    parent_lot_id = Column(Integer, ForeignKey("inventory_parent_lots.id"), nullable=True)
+    label = Column(String, nullable=False) # e.g., "Hammer Price", "Replacement part"
+    amount = Column(Float, nullable=False)
+    category = Column(String) # acquisition, refurb, packaging, misc
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
+    inventory_item = relationship("InventoryItem", back_populates="cost_line_items")
+    parent_lot = relationship("InventoryParentLot", back_populates="cost_line_items")
+
+
+class PackagingConfiguration(Base):
+    __tablename__ = "packaging_configurations"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    length = Column(Float)
+    width = Column(Float)
+    height = Column(Float)
+    box_cost = Column(Float, default=0.0)
+    void_fill_cost = Column(Float, default=0.0)
+    addon_cost = Column(Float, default=0.0)
+    total_cost = Column(Float, default=0.0) # computed
+    is_active = Column(Boolean, default=True)
+
 
 class UserBidActivity(Base):
     __tablename__ = "user_bid_activity"
