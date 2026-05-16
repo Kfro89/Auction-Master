@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './BiddingView.css';
 import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
 import { useSortableData } from '../hooks/useSortableData';
-import { ArrowUpDown, RefreshCw, ChevronRight, Wallet, Gavel, Target } from 'lucide-react';
+import { ArrowUpDown, RefreshCw, ChevronRight, Wallet, Gavel, Target, Archive, RotateCcw } from 'lucide-react';
 import ItemDetailModal from '../components/ItemDetailModal';
 import LotSplitModal from '../components/LotSplitModal';
 import type { LotSplitData } from '../components/LotSplitModal';
@@ -49,6 +49,7 @@ interface Item {
   };
   computedRoi?: number | null;
   landedCost?: number;
+  is_archived?: boolean;
 }
 
 const getRowClass = (status?: string) => {
@@ -97,6 +98,7 @@ const BiddingView: React.FC = () => {
   const [auctionHouseFilter, setAuctionHouseFilter] = useState("");
   const [parentCategoryFilter, setParentCategoryFilter] = useState("");
   const [subCategoryFilter, setSubCategoryFilter] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [targetMargins, setTargetMargins] = useState<Record<number, string | number>>({});
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [comparables, setComparables] = useState<Record<number, any>>({});
@@ -106,6 +108,25 @@ const BiddingView: React.FC = () => {
   const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
   const [isLotSplitOpen, setIsLotSplitOpen] = useState(false);
   const [itemToWin, setItemToWin] = useState<Item | null>(null);
+
+  const handleArchive = async (id: number, isArchived: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/items/${id}/archive`, {
+        method: 'PATCH',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_archived: isArchived })
+      });
+      if (response.ok) {
+        await fetchItems();
+      }
+    } catch (e) {
+      console.error('Failed to archive item:', e);
+    }
+  };
 
   const handleMarkWon = (item: Item) => {
     setItemToWin(item);
@@ -232,9 +253,9 @@ const BiddingView: React.FC = () => {
     setTargetMargins(prev => ({...prev, [id]: val}));
   };
 
-  const fetchItems = async () => {
+  const fetchItems = React.useCallback(async () => {
     try {
-      const response = await fetch('/api/items/');
+      const response = await fetch(`/api/items/?show_archived=${showArchived}`);
       if (response.ok) {
         const data = await response.json();
         setItems(data.filter((item: Item) => item.is_user_bidding));
@@ -244,7 +265,7 @@ const BiddingView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showArchived]);
 
   const refreshActiveBids = async () => {
     setRefreshing(true);
@@ -269,13 +290,14 @@ const BiddingView: React.FC = () => {
     fetchSettings();
     const interval = setInterval(fetchItems, 30000); // Poll every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [showArchived, fetchItems]);
 
   const { totalCurrentBids, totalUserBids, totalMaxExposure } = useMemo(() => {
     let tCurrent = 0;
     let tUser = 0;
     let tExposure = 0;
     items.forEach(item => {
+      if (item.is_archived) return; // Skip archived items
       if (item.user_bids) {
         tCurrent += item.user_bids.current_bid_amount || 0;
         tUser += item.user_bids.user_bid_amount || 0; 
@@ -343,11 +365,10 @@ const BiddingView: React.FC = () => {
   const itemsWithComputedRoi = useMemo(() => {
     return filteredItems.map(item => {
       let roi = null;
-      let landedCost = 0;
       const effectiveBid = item.user_bids?.user_proxy_bid ?? item.current_bid;
       const shippingCost = item.shipping_cost_est || 0;
       const buyerPremium = effectiveBid * 0.15;
-      landedCost = effectiveBid + shippingCost + buyerPremium;
+      const landedCost = effectiveBid + shippingCost + buyerPremium;
       if (item.valuation) {
         if (landedCost > 0) {
           roi = ((item.valuation.est_market_value - landedCost) / landedCost) * 100;
@@ -405,6 +426,12 @@ const BiddingView: React.FC = () => {
 
       <section className="grid-section">
         <FilterBar title="My Bids">
+          <button 
+            className={`saas-input whitespace-nowrap px-4 transition-colors ${showArchived ? 'bg-indigo-600/40 border-indigo-500/50 text-white' : 'hover:bg-white/5'}`}
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <select 
             className="saas-input"
             value={auctionHouseFilter}
@@ -483,7 +510,7 @@ const BiddingView: React.FC = () => {
                 <th onClick={() => requestSort('end_time')} className="sortable">
                   <div className="header-content center">Ends {renderSortIcon('end_time')}</div>
                 </th>
-                <th className="w-8"></th>
+                <th className="w-16 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -491,7 +518,7 @@ const BiddingView: React.FC = () => {
                 return (
                   <tr 
                     key={item.id} 
-                    className={`bidding-row transition-colors cursor-pointer hover:bg-white/5 ${getRowClass(item.user_bids?.user_bid_status)}`}
+                    className={`bidding-row transition-colors cursor-pointer hover:bg-white/5 ${getRowClass(item.user_bids?.user_bid_status)} ${item.is_archived ? 'opacity-60 grayscale-[0.5]' : ''}`}
                     onClick={() => openItemDetail(item)}
                   >
                     <td>
@@ -522,8 +549,22 @@ const BiddingView: React.FC = () => {
                     <td>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
                     <td>{item.computedRoi !== null ? `${Math.round(item.computedRoi)}%` : '--'}</td>
                     <td className="timer-text">{formatAuctionDate(item.end_time, timezone)}</td>
-                    <td className="text-center opacity-50">
-                      <ChevronRight size={16} />
+                    <td className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {(['lost', 'loss', 'outbid', 'outbid_near', 'reserve_not_met'].includes(item.user_bids?.user_bid_status || '') || item.is_archived) && (
+                          <button 
+                            className="p-1 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleArchive(item.id, !item.is_archived);
+                            }}
+                            title={item.is_archived ? "Unarchive" : "Archive"}
+                          >
+                            {item.is_archived ? <RotateCcw size={16} /> : <Archive size={16} />}
+                          </button>
+                        )}
+                        <ChevronRight size={16} className="opacity-50" />
+                      </div>
                     </td>
                   </tr>
                 );
