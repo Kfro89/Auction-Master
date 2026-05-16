@@ -502,7 +502,7 @@ const BiddingView: React.FC = () => {
                       />
                     </td>
                     <td className="title-cell">
-                      <span className="truncate max-w-[300px]" title={item.title}>{item.title}</span>
+                      <span className="whitespace-normal break-words" title={item.title}>{item.title}</span>
                     </td>
                     <td className="mono">{item.lot_number}</td>
                     <td className="text-center">
