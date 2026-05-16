@@ -153,3 +153,28 @@ def test_status_transition_validation():
     resp = client.patch(f"/api/inventory/{inv_id}", json={"status": "INVALID_STATE"})
     assert resp.status_code == 400
     assert "Invalid status" in resp.json()["detail"]
+
+def test_add_refurbishment_costs():
+    # 1. Create inventory item
+    db = TestingSessionLocal()
+    inv_item = InventoryItem(title="Item for Refurb", status="REFURBISH")
+    db.add(inv_item)
+    db.commit()
+    inv_id = inv_item.id
+    db.close()
+
+    # 2. Add cost
+    response = client.post(
+        f"/api/inventory/{inv_id}/costs",
+        json={"label": "New Battery", "amount": 15.0, "category": "refurb"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["label"] == "New Battery"
+    assert data[0]["amount"] == 15.0
+
+    # 3. Transition to STAGING
+    resp = client.patch(f"/api/inventory/{inv_id}", json={"status": "STAGING"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "STAGING"

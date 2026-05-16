@@ -43,6 +43,11 @@ class LotSplitRequest(BaseModel):
     misc_fees: float = 0.0
     title: Optional[str] = None
 
+class CostLineItemCreate(BaseModel):
+    label: str
+    amount: float
+    category: str = "refurb"
+
 @router.get("/")
 async def list_inventory(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     return db.query(InventoryItem).order_by(InventoryItem.created_at.desc()).all()
@@ -195,6 +200,24 @@ async def mark_item_as_won(item_id: int, request: LotSplitRequest, db: Session =
     db.commit()
 
     return {"parent_lot_id": parent_lot.id, "inventory_item_ids": [it.id for it in inventory_items]}
+
+@router.post("/{id}/costs")
+async def add_cost_line_item(id: int, request: CostLineItemCreate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    
+    cost_line = InventoryCostLineItem(
+        inventory_item_id=id,
+        label=request.label,
+        amount=request.amount,
+        category=request.category
+    )
+    db.add(cost_line)
+    db.commit()
+    db.refresh(item)
+    
+    return [{"id": c.id, "label": c.label, "amount": c.amount, "category": c.category, "created_at": c.created_at} for c in item.cost_line_items]
 
 @router.post("/{id}/draft")
 async def draft_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
