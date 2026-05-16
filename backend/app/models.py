@@ -153,6 +153,7 @@ class InventoryItem(Base):
 
     # New fields for Work Queue Phase 1
     parent_lot_id = Column(Integer, ForeignKey("inventory_parent_lots.id"), nullable=True)
+    anti_tamper_tag = Column(String)
     weight = Column(Float)
     length = Column(Float)
     width = Column(Float)

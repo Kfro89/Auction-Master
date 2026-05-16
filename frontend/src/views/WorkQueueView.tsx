@@ -34,6 +34,7 @@ interface InventoryItem {
   length?: number;
   width?: number;
   height?: number;
+  anti_tamper_tag?: string;
   storage_location?: string;
   tracking_number?: string;
   shipping_method?: string;
@@ -385,6 +386,16 @@ const WorkQueueView: React.FC = () => {
                       <h3 className="text-sm font-bold text-orange-400 mb-3 flex items-center gap-2">
                         <Boxes size={16} /> Dims & Weight
                       </h3>
+                      <div className="field-group mb-4">
+                        <label className="text-[10px] text-gray-400">Anti-Tamper Barcode Tag</label>
+                        <input 
+                          type="text" 
+                          className="frosted-input w-full mt-1"
+                          placeholder="e.g. XYZ-123"
+                          value={selectedItem.anti_tamper_tag || ''}
+                          onChange={e => handleUpdateItem(selectedItem.id, { anti_tamper_tag: e.target.value })}
+                        />
+                      </div>
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="field-group">
                           <label className="text-[10px] text-gray-400">Weight (oz)</label>

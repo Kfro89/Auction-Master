@@ -68,6 +68,7 @@ const SettingsView: React.FC = () => {
         else if (hostname.includes('dickensheet')) key = 'dickensheet_cookie';
         else if (hostname.includes('whitley')) key = 'rmeb_cookie';
         else if (hostname.includes('roller')) key = 'rol_cookie';
+        else if (hostname.includes('govdeals')) key = 'govdeals_cookie';
 
         if (key) {
           setSettings(prev => ({ ...prev, [key]: cookie }));
@@ -610,6 +611,68 @@ const SettingsView: React.FC = () => {
               disabled={saving === 'ah_dickensheet'}
             >
               {saving === 'ah_dickensheet' ? 'Saving...' : 'Save Dickensheet Credentials'}
+            </button>
+          </div>
+        )}
+
+        {activeCategory === 'ah_govdeals' && (
+          <div className="settings-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2>GovDeals Integration</h2>
+              <div>
+                <button className="action-btn" onClick={() => openCaptureTab('https://www.govdeals.com/en/login')} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', marginRight: '0.5rem' }}>
+                  Login & Capture
+                </button>
+                <button className="action-btn" onClick={() => verifyLogin('govdeals')} disabled={verifying === 'govdeals'} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                  {verifying === 'govdeals' ? 'Testing...' : 'Test Login'}
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Provide your target area and an active session cookie.</p>
+            
+            <div className="form-group">
+              <label htmlFor="govdeals_zip">Target Area Code (Zip)</label>
+              <input
+                id="govdeals_zip"
+                name="govdeals_zip"
+                type="text"
+                value={settings.govdeals_zip || ''}
+                onChange={handleChange}
+                placeholder="e.g. 80543"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="govdeals_radius">Search Radius (Miles)</label>
+              <input
+                id="govdeals_radius"
+                name="govdeals_radius"
+                type="number"
+                value={settings.govdeals_radius || ''}
+                onChange={handleChange}
+                placeholder="e.g. 100"
+              />
+            </div>
+            
+            <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
+            
+            <div className="form-group">
+              <label htmlFor="govdeals_username">Username</label>
+              <input id="govdeals_username" name="govdeals_username" type="text" value={settings.govdeals_username || ''} onChange={handleChange} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="govdeals_password">Password</label>
+              <input id="govdeals_password" name="govdeals_password" type="password" value={settings.govdeals_password || ''} onChange={handleChange} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="govdeals_cookie">Session Cookie (Pseudo-Auth)</label>
+              <input id="govdeals_cookie" name="govdeals_cookie" type="text" value={settings.govdeals_cookie || ''} onChange={handleChange} placeholder="Session cookie string..." />
+            </div>
+            <button 
+              className="save-btn mt-4" 
+              onClick={() => saveSettings(['govdeals_zip', 'govdeals_radius', 'govdeals_username', 'govdeals_password', 'govdeals_cookie'], 'ah_govdeals')}
+              disabled={saving === 'ah_govdeals'}
+            >
+              {saving === 'ah_govdeals' ? 'Saving...' : 'Save GovDeals Settings'}
             </button>
           </div>
         )}

@@ -21,6 +21,7 @@ class ScanRequest(BaseModel):
 
 class InventoryItemUpdate(BaseModel):
     title: Optional[str] = None
+    anti_tamper_tag: Optional[str] = None
     drafted_title: Optional[str] = None
     drafted_description: Optional[str] = None
     ebay_category_id: Optional[str] = None
