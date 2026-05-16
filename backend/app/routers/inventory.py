@@ -8,7 +8,7 @@ import statistics
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import InventoryItem, Item
+from ..models import InventoryItem, Item, InventoryParentLot, InventoryCostLineItem
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.drafting import generate_ebay_draft
@@ -28,6 +28,20 @@ class InventoryItemUpdate(BaseModel):
     estimated_price: Optional[float] = None
     status: Optional[str] = None
     images: Optional[List[str]] = None
+    weight: Optional[float] = None
+    length: Optional[float] = None
+    width: Optional[float] = None
+    height: Optional[float] = None
+    storage_location: Optional[str] = None
+    tracking_number: Optional[str] = None
+
+class LotSplitRequest(BaseModel):
+    split_count: int = 1
+    hammer_price: float = 0.0
+    buyer_premium_pct: float = 0.0
+    tax_rate: float = 0.0
+    misc_fees: float = 0.0
+    title: Optional[str] = None
 
 @router.get("/")
 async def list_inventory(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
@@ -103,13 +117,84 @@ async def update_inventory_item(id: int, update_data: InventoryItemUpdate, db: S
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     
-    update_dict = update_data.dict(exclude_unset=True)
+    # Validation for status transitions
+    if update_data.status:
+        valid_statuses = ["WON", "PAID", "TRANSIT_VENDOR", "TRANSIT_LOCAL", "RECEIVED", "REFURBISH", "STAGING", "READY_TO_LIST", "listed", "sold", "staged"]
+        if update_data.status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {update_data.status}")
+
+    update_dict = update_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
         setattr(item, key, value)
     
     db.commit()
     db.refresh(item)
     return item
+
+@router.post("/items/{item_id}/won")
+async def mark_item_as_won(item_id: int, request: LotSplitRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    # 1. Fetch Auction Item
+    auction_item = db.query(Item).filter(Item.id == item_id).first()
+    if not auction_item:
+        raise HTTPException(status_code=404, detail="Auction item not found")
+
+    # 2. Create Parent Lot
+    parent_lot = InventoryParentLot(
+        source_item_id=item_id,
+        title=request.title or auction_item.title,
+        hammer_price=request.hammer_price,
+        buyer_premium_pct=request.buyer_premium_pct,
+        tax_rate=request.tax_rate,
+        misc_fees=request.misc_fees
+    )
+    db.add(parent_lot)
+    db.commit()
+    db.refresh(parent_lot)
+
+    # 3. Create Child Inventory Items
+    inventory_items = []
+    for i in range(request.split_count):
+        title = parent_lot.title
+        if request.split_count > 1:
+            title = f"{parent_lot.title} (Part {i+1})"
+            
+        inv_item = InventoryItem(
+            parent_lot_id=parent_lot.id,
+            title=title,
+            status="WON",
+            images=auction_item.images or []
+        )
+        db.add(inv_item)
+        inventory_items.append(inv_item)
+    
+    db.commit()
+
+    # 4. Map initial costs to InventoryCostLineItems (even distribution)
+    total_acquisition_cost = (
+        request.hammer_price + 
+        (request.hammer_price * (request.buyer_premium_pct / 100)) +
+        (request.hammer_price * (request.tax_rate / 100)) +
+        request.misc_fees
+    )
+    
+    cost_per_item = total_acquisition_cost / request.split_count
+    
+    for inv_item in inventory_items:
+        cost_line = InventoryCostLineItem(
+            inventory_item_id=inv_item.id,
+            label="Initial Acquisition (Allocated)",
+            amount=cost_per_item,
+            category="acquisition"
+        )
+        db.add(cost_line)
+    
+    db.commit()
+    
+    # Update auction item status
+    auction_item.status = "won"
+    db.commit()
+
+    return {"parent_lot_id": parent_lot.id, "inventory_item_ids": [it.id for it in inventory_items]}
 
 @router.post("/{id}/draft")
 async def draft_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
