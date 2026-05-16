@@ -67,7 +67,7 @@ class BidWranglerApiScraper(BaseScraper):
         If session_cookie is provided, use it directly (Pseudo-Auth bypass).
         """
         if session_cookie:
-            self.headers["Cookie"] = session_cookie
+            self.headers["Cookie"] = session_cookie.strip()
             return True
             
         raise NotImplementedError("BidWrangler API authentication not fully implemented. Use session cookie bypass.")
