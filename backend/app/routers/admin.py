@@ -20,6 +20,7 @@ from ..services.security import encrypt_value, decrypt_value
 from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
 from ..scrapers.public_surplus import PublicSurplusScraper
 from ..scrapers.bid_wrangler import BidWranglerApiScraper
+from ..scrapers.govdeals import GovDealsScraper
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,7 @@ async def refresh_active_bids(db: Session = Depends(get_db), current_user: str =
         ("rol", "https://bid.rollerauction.com", "Roller Auction", AuctioneerSoftwareScraper),
         ("public_surplus", "https://www.publicsurplus.com", "Public Surplus", PublicSurplusScraper),
         ("dickensheet", "https://bid.dickensheet.com", "Dickensheet", BidWranglerApiScraper),
+        ("govdeals", "https://www.govdeals.com", "GovDeals", GovDealsScraper),
     ]
 
     for website_key, base_url, name, scraper_class in platforms:
