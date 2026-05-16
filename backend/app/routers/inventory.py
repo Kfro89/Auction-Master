@@ -274,3 +274,10 @@ async def draft_item(id: int, db: Session = Depends(get_db), current_user: str =
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Drafting failed: {str(e)}")
+
+from ..schemas import SoldItemResponse
+
+@router.get("/sold-queue", response_model=List[SoldItemResponse])
+def get_sold_queue(db: Session = Depends(get_db)):
+    # Mock return for sold items awaiting shipment
+    return [{"id": 1, "title": "Mock Sold Item", "status": "SOLD", "storage_location": "Bin 12", "packaging_config": "8x8x8 Box"}]
