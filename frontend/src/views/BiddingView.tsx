@@ -589,6 +589,7 @@ const BiddingView: React.FC = () => {
         onPersistMargin={() => selectedItem && persistMarginChange(selectedItem.id)}
         userTimezone={timezone}
         onMarkWon={() => selectedItem && handleMarkWon(selectedItem)}
+        onArchive={(id, isArchived) => handleArchive(id, isArchived)}
       />
 
       {itemToWin && (

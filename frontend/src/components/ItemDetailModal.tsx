@@ -79,6 +79,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   valuationStatusText,
   onPlaceBid,
   onMarkWon,
+  onArchive,
   isBidding,
   bidError,
   bidSuccess,
@@ -354,15 +355,26 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       </div>
                     )}
                     {viewContext === 'bidding' && item.user_bids?.user_bid_status !== 'won' && (
-                      <button 
-                        className="glass-blue-btn-small"
-                        style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.3)' }}
-                        onClick={() => onMarkWon && onMarkWon(item.id)}
-                      >
-                        Mark as Won
-                      </button>
-                    )}
-                    {isValuating ? (
+                      <>
+                        <button
+                          className="glass-blue-btn-small"
+                          style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.3)' }}
+                          onClick={() => onMarkWon && onMarkWon(item.id)}
+                        >
+                          Mark as Won
+                        </button>
+                        {(['lost', 'loss', 'outbid', 'outbid_near', 'reserve_not_met'].includes(item.user_bids?.user_bid_status || '') || item.is_archived) && (
+                          <button
+                            className="glass-blue-btn-small"
+                            style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: item.is_archived ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: item.is_archived ? '#10b981' : '#ef4444', borderColor: item.is_archived ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)' }}
+                            onClick={() => onArchive && onArchive(item.id, !item.is_archived)}
+                          >
+                            {item.is_archived ? <RotateCcw size={16} className="mr-2" /> : <Archive size={16} className="mr-2" />}
+                            {item.is_archived ? 'Unarchive' : 'Archive'}
+                          </button>
+                        )}
+                      </>
+                    )}                    {isValuating ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', marginBottom: '12px' }}>
                         <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
                         <span>{valuationStatusText || "Loading..."}</span>
@@ -458,6 +470,11 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         </div>
       </div>
     </Modal>
+  );
+};
+
+export default ItemDetailModal;
+Modal>
   );
 };
 
