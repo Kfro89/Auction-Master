@@ -19,19 +19,12 @@ const RmaView: React.FC = () => {
         setLoading(true);
         setError('');
         try {
-            // Note: Our API returns list when calling /api/inventory/ but we can assume /api/inventory/{id} if supported, or we can filter from /api/inventory/
-            const response = await fetch('/api/inventory/');
+            const response = await fetch(`/api/inventory/${itemIdInput}`);
             if (response.ok) {
-                const data: InventoryItem[] = await response.json();
-                const foundItem = data.find(i => i.id.toString() === itemIdInput);
-                if (foundItem) {
-                    setItem(foundItem);
-                } else {
-                    setError('Item not found');
-                    setItem(null);
-                }
+                const foundItem: InventoryItem = await response.json();
+                setItem(foundItem);
             } else {
-                setError('Failed to fetch item');
+                setError('Item not found');
                 setItem(null);
             }
         } catch (err) {

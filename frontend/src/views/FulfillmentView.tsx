@@ -66,9 +66,9 @@ export const FulfillmentView: React.FC = () => {
             <div className="saas-card-grid">
                 {items.map((item) => (
                     <div key={item.id} className="saas-card">
-                        <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#111827' }}>{item.title}</h3>
-                        <p style={{ margin: '0 0 8px 0', color: '#4b5563', fontSize: '14px' }}>Location: {item.storage_location}</p>
-                        <p style={{ margin: '0 0 20px 0', color: '#4b5563', fontSize: '14px' }}>Packaging: {item.packaging_config}</p>
+                        <h3 className="text-lg text-gray-900 mb-3">{item.title}</h3>
+                        <p className="text-sm text-gray-600 mb-2">Location: {item.storage_location}</p>
+                        <p className="text-sm text-gray-600 mb-5">Packaging: {item.packaging_config}</p>
                         <button className="saas-btn" onClick={() => openModal(item)}>Reconcile & Archive</button>
                     </div>
                 ))}
@@ -108,10 +108,10 @@ export const FulfillmentView: React.FC = () => {
                             fontSize: '15px',
                             lineHeight: '1.5'
                         }}>
-                            Confirm final expenses for <strong style={{ color: '#111827' }}>{reconcilingItem.title}</strong> before archiving.
+                            Confirm final expenses for <strong className="text-gray-900">{reconcilingItem.title}</strong> before archiving.
                         </p>
 
-                        <div style={{ marginBottom: '24px' }}>
+                        <div className="mb-6">
                             <label style={{
                                 display: 'block',
                                 marginBottom: '8px',
@@ -139,7 +139,7 @@ export const FulfillmentView: React.FC = () => {
                             />
                         </div>
 
-                        <div style={{ marginBottom: '32px' }}>
+                        <div className="mb-8">
                             <label style={{
                                 display: 'block',
                                 marginBottom: '8px',
@@ -167,11 +167,7 @@ export const FulfillmentView: React.FC = () => {
                             />
                         </div>
 
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: '12px'
-                        }}>
+                        <div className="flex justify-end gap-3">
                             <button 
                                 onClick={closeModal}
                                 disabled={isSubmitting}
