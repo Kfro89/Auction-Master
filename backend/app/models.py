@@ -89,6 +89,7 @@ class Item(Base):
     
     is_user_bidding = Column(Boolean, default=False)
     is_watched = Column(Boolean, default=False, server_default='false')
+    is_archived = Column(Boolean, default=False, server_default='false')
 
 
 class Setting(Base):
