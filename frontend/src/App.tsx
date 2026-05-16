@@ -8,6 +8,7 @@ import SettingsView from './views/SettingsView';
 import BiddingView from './views/BiddingView';
 import WorkQueueView from './views/WorkQueueView';
 import StoreView from './views/StoreView';
+import LedgerView from './views/LedgerView';
 import LoginView from './views/LoginView';
 import WatchListView from './views/WatchListView';
 import { CommandProvider } from './contexts/CommandContext';
@@ -46,6 +47,8 @@ function App() {
         return <WorkQueueView />;
       case 'store':
         return <StoreView />;
+      case 'ledger':
+        return <LedgerView />;
       case 'settings':
         return <SettingsView />;
       default:

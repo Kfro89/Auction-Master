@@ -268,6 +268,19 @@ class EbayOrder(Base):
 
     listing = relationship("EbayListing", back_populates="order")
 
+class BusinessExpense(Base):
+    __tablename__ = "business_expenses"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    amount = Column(Float, nullable=False)
+    payee = Column(String, nullable=False)
+    category = Column(String, nullable=False) # Auto/Travel, Supplies, Rent, Software, Legal
+    description = Column(String)
+    receipt_url = Column(String)
+    is_recurring = Column(Boolean, default=False)
+    recurring_frequency = Column(String) # Weekly, Monthly, Annually
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+
 
 from sqlalchemy import UniqueConstraint
 

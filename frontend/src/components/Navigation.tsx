@@ -1,6 +1,6 @@
 import React from 'react';
 import './Navigation.css';
-import { Search, Gavel, Package, BarChart3, Settings, Eye, Car } from 'lucide-react';
+import { Search, Gavel, Package, BarChart3, Settings, Eye, Car, Landmark } from 'lucide-react';
 
 interface NavProps {
   activeTab: string;
@@ -16,6 +16,7 @@ const Navigation: React.FC<NavProps> = ({ activeTab, onTabChange }) => {
       case 'bidding': return <Gavel size={22} />;
       case 'work-queue': return <Package size={22} />;
       case 'store': return <BarChart3 size={22} />;
+      case 'ledger': return <Landmark size={22} />;
       case 'settings': return <Settings size={22} />;
       default: return <Search size={22} />;
     }
@@ -28,6 +29,7 @@ const Navigation: React.FC<NavProps> = ({ activeTab, onTabChange }) => {
     { id: 'bidding', label: 'Bidding' },
     { id: 'work-queue', label: 'Work Queue' },
     { id: 'store', label: 'Store' },
+    { id: 'ledger', label: 'Ledger' },
     { id: 'settings', label: 'Settings' },
   ];
 
