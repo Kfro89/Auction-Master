@@ -84,8 +84,8 @@ class GovDealsScraper(BaseScraper):
                         lot_data = {
                             "id": str(asset_id),
                             "title": item.get("assetShortDescription", ""),
-                            "detail_url": detail_url,
-                            "price": float(item.get("currentBid") or 0.0),
+                            "url": detail_url,
+                            "current_bid": float(item.get("currentBid") or 0.0),
                             "end_time": item.get("assetAuctionEndDateUtc"),
                             "thumbnail_url": item.get("photo"),
                             "state": item.get("locationState")
@@ -110,7 +110,7 @@ class GovDealsScraper(BaseScraper):
             try:
                 response = await client.get(url)
                 return response.status_code == 200
-            except:
+            except Exception:
                 return False
 
     async def login(self, username: str, password: str = None, session_cookie: str = None) -> bool:
@@ -122,55 +122,65 @@ class GovDealsScraper(BaseScraper):
             return True
         return False
 
-    async def fetch_my_bids(self) -> List[Dict[str, Any]]:
-        if "Cookie" not in self.headers:
-            raise PermissionError("No session cookie set. Call login() first.")
+    async def fetch_my_bids(self, buyer_id: str = None) -> List[Dict[str, Any]]:
+        if not buyer_id:
+            logger.warning("No buyerId provided for GovDeals fetch_my_bids. Skipping.")
+            return []
             
-        url = f"{self.base_url}/en/account/mybids"
+        url = "https://maestro.lqdt1.com/buyerbids/open"
+        
+        # Ensure buyer_id is an integer if possible
+        try:
+            b_id = int(buyer_id)
+        except (ValueError, TypeError):
+            b_id = buyer_id
+
+        payload = {
+            "buyerId": b_id,
+            "businessId": "GD",
+            "sortField": "auctionend",
+            "sortOrder": "asc",
+            "siteId": 1
+        }
+        
         bidding_data = []
         
         async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
             try:
-                response = await client.get(url)
+                response = await client.post(url, json=payload)
                 response.raise_for_status()
-                soup = BeautifulSoup(response.text, "html.parser")
                 
-                # Find the bids grid or table. GovDeals uses modern card grids or tables.
-                # Since exact HTML varies, we will look for common bid card wrappers or rows.
-                rows = soup.select('table tr')
-                if not rows:
-                    rows = soup.select('div.bid-row, div.card, div.list-group-item')
-                
-                for row in rows:
-                    # Basic extraction strategy - adapt based on actual GovDeals HTML
-                    links = row.find_all('a', href=re.compile(r'auc=\d+'))
-                    if not links: continue
+                results = response.json()
+                if not isinstance(results, list):
+                    logger.error(f"Unexpected response format from GovDeals: {results}")
+                    return []
                     
-                    href = links[0]['href']
-                    import re
-                    match = re.search(r'auc=(\d+)', href)
-                    if not match: continue
-                    auc_id = match.group(1)
+                for item in results:
+                    asset_id = item.get("assetId")
+                    if not asset_id:
+                        continue
+                        
+                    is_high_bidder = item.get("isHighBidder", False)
+                    high_bid = float(item.get("highBidAmount") or 0.0)
                     
-                    text_content = row.get_text(" ", strip=True).lower()
-                    
-                    is_winning = "winning" in text_content or "highest bidder" in text_content
-                    is_closed = "closed" in text_content or "ended" in text_content or "lost" in text_content or "won" in text_content
-                    
-                    status = "closed" if is_closed else "open"
-                    if is_closed:
-                        user_bid_status = "won" if ("won" in text_content or "paid" in text_content or "pay" in text_content) else "lost"
+                    # If buyerHighestBidAmount is null, use highBid if we are high bidder
+                    buyer_highest = item.get("buyerHighestBidAmount")
+                    if buyer_highest is None:
+                        buyer_highest = high_bid if is_high_bidder else 0.0
                     else:
-                        user_bid_status = "winning" if is_winning else "outbid"
-
+                        buyer_highest = float(buyer_highest)
+                        
+                    buyer_auto = float(item.get("buyerAutoBidAmount") or 0.0)
+                    
                     bidding_data.append({
-                        "id": auc_id,
-                        "title": links[0].get_text(strip=True),
-                        "status": status,
-                        "user_bid_status": user_bid_status,
-                        "current_bid": 0.0, # To be refined with exact selectors
-                        "user_bid": 0.0,
-                        "proxy_bid": 0.0,
+                        "id": str(asset_id),
+                        "title": item.get("assetShortDescription", ""),
+                        "status": "open",
+                        "user_bid_status": "winning" if is_high_bidder else "outbid",
+                        "current_bid": high_bid,
+                        "user_bid": buyer_highest,
+                        "proxy_bid": buyer_auto,
+                        "end_time": item.get("auctionEndDateUTC")
                     })
             except Exception as e:
                 logger.error(f"Error fetching GovDeals my bids: {e}")
