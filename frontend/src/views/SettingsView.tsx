@@ -16,6 +16,7 @@ const CATEGORIES = [
       { id: 'ah_roller', label: 'Roller Auction' },
       { id: 'ah_public_surplus', label: 'Public Surplus' },
       { id: 'ah_dickensheet', label: 'Dickensheet' },
+      { id: 'ah_govdeals', label: 'GovDeals' },
     ]
   }
 ];
@@ -40,12 +41,16 @@ const SettingsView: React.FC = () => {
     whitley_bidder_id: '',
     roller_bidder_id: '',
     dickensheet_bidder_id: '',
+    govdeals_bidder_id: '',
     public_surplus_zip: '',
     public_surplus_radius: '',
+    govdeals_zip: '',
+    govdeals_radius: '',
     rmeb_username: '', rmeb_password: '', rmeb_cookie: '',
     rol_username: '', rol_password: '', rol_cookie: '',
     public_surplus_username: '', public_surplus_password: '', public_surplus_cookie: '',
     dickensheet_username: '', dickensheet_password: '', dickensheet_cookie: '',
+    govdeals_username: '', govdeals_password: '', govdeals_cookie: '',
     app_admin_username: '', app_admin_password: '',
     user_timezone: 'America/Denver', // Default
     description_template: ''
@@ -145,7 +150,7 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
   };
@@ -309,12 +314,27 @@ const SettingsView: React.FC = () => {
                 placeholder="Enter eBay Client Secret"
               />
             </div>
+            <div className="form-group mt-6">
+              <label htmlFor="ebay_description_template" className="font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-3 block">eBay Listing HTML Template</label>
+              <p className="text-sm text-gray-500 mb-3">
+                Paste your custom HTML template here. The AI Drafting agent will use this structure and inject item-specific details. Use placeholders if necessary, or just let the LLM adapt it.
+              </p>
+              <textarea
+                id="ebay_description_template"
+                name="ebay_description_template"
+                value={settings.ebay_description_template || ''}
+                onChange={handleChange}
+                rows={12}
+                className="frosted-input w-full font-mono text-xs"
+                placeholder="<html><body>...</body></html>"
+              />
+            </div>
             <button 
               className="save-btn mt-4" 
-              onClick={() => saveSettings(['ebay_client_id', 'ebay_client_secret'], 'ebay')}
+              onClick={() => saveSettings(['ebay_client_id', 'ebay_client_secret', 'ebay_description_template'], 'ebay')}
               disabled={saving === 'ebay'}
             >
-              {saving === 'ebay' ? 'Saving...' : 'Save eBay Credentials'}
+              {saving === 'ebay' ? 'Saving...' : 'Save eBay Credentials & Template'}
             </button>
           </div>
         )}
@@ -667,9 +687,20 @@ const SettingsView: React.FC = () => {
               <label htmlFor="govdeals_cookie">Session Cookie (Pseudo-Auth)</label>
               <input id="govdeals_cookie" name="govdeals_cookie" type="text" value={settings.govdeals_cookie || ''} onChange={handleChange} placeholder="Session cookie string..." />
             </div>
+            <div className="form-group">
+              <label htmlFor="govdeals_bidder_id">Buyer ID (Required for Active Bids)</label>
+              <input 
+                id="govdeals_bidder_id" 
+                name="govdeals_bidder_id" 
+                type="text" 
+                value={settings.govdeals_bidder_id || ''} 
+                onChange={handleChange} 
+                placeholder="e.g. 3908433" 
+              />
+            </div>
             <button 
               className="save-btn mt-4" 
-              onClick={() => saveSettings(['govdeals_zip', 'govdeals_radius', 'govdeals_username', 'govdeals_password', 'govdeals_cookie'], 'ah_govdeals')}
+              onClick={() => saveSettings(['govdeals_zip', 'govdeals_radius', 'govdeals_username', 'govdeals_password', 'govdeals_cookie', 'govdeals_bidder_id'], 'ah_govdeals')}
               disabled={saving === 'ah_govdeals'}
             >
               {saving === 'ah_govdeals' ? 'Saving...' : 'Save GovDeals Settings'}
