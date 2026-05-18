@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_premium: float = 0.0, is_vehicle: bool = False) -> Optional[Dict[str, Any]]:
+def calculate_valuation(prices: List[float], raw_listings: List[Dict[str, Any]] = None, target_roi: float = 0.30, auction_premium: float = 0.0, is_vehicle: bool = False) -> Optional[Dict[str, Any]]:
     initial_sample_size = len(prices)
     min_size = 5 if is_vehicle else 30
     if initial_sample_size < min_size:
@@ -49,9 +49,8 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
         
     trimmed_median = statistics.median(trimmed_prices)
     
-    # 3. Market adjustment factor
-    # For vehicles, we take 90% of the trimmed median (active asking prices)
-    est_market_value = trimmed_median * 0.90 if is_vehicle else trimmed_median * 0.75
+    # 3. Use trimmed median directly as est_market_value (removed market adjustment factor)
+    est_market_value = trimmed_median
     
     # 4. Math for max bid
     # eBay Fees approx = 13.25% + $0.40
@@ -68,6 +67,19 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
     # Ensure we don't return negative bids for items worth less than eBay fees
     max_bid_for_target_roi = max(0.0, max_bid_for_target_roi)
     
+    # REQ-3.3: Automated Price Aggregation
+    agg_metrics = {}
+    if raw_listings:
+        raw_prices = [listing["price"] for listing in raw_listings if isinstance(listing.get("price"), (int, float))]
+        if raw_prices:
+            agg_metrics = {
+                "avg_asking_price": sum(raw_prices) / len(raw_prices),
+                "median_asking_price": statistics.median(raw_prices),
+                "price_range_low": min(raw_prices),
+                "price_range_high": max(raw_prices),
+                "raw_listings": raw_listings
+            }
+
     return {
         "initial_sample_size": initial_sample_size,
         "sample_size_after_zscore": sample_size_after_zscore,
@@ -76,10 +88,11 @@ def calculate_valuation(prices: List[float], target_roi: float = 0.30, auction_p
         "mean": mean,
         "est_market_value": est_market_value,
         "ebay_fees": ebay_fees,
-        "max_bid_for_target_roi": max_bid_for_target_roi
+        "max_bid_for_target_roi": max_bid_for_target_roi,
+        **agg_metrics
     }
 
-async def extract_and_decode_vin(item: Item, val_meta: dict) -> None:
+async def extract_and_decode_vin(item: Any, val_meta: dict) -> None:
     text_to_search = f"{item.title} {item.description or ''}"
     
     # 1. Search for VIN preceded by "VIN"
@@ -103,9 +116,11 @@ async def extract_and_decode_vin(item: Item, val_meta: dict) -> None:
             vin = vin_candidate
             
     if vin:
-        item.vin = vin
-        if not item.vehicle_make:
-            # Decode VIN
+        if hasattr(item, "vin"):
+            item.vin = vin
+            
+        # Decode VIN if we have somewhere to put the results
+        if hasattr(item, "vehicle_make"):
             try:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}?format=json")
@@ -118,7 +133,8 @@ async def extract_and_decode_vin(item: Item, val_meta: dict) -> None:
                             item.vehicle_model = res.get("Model")
                             item.vehicle_trim = res.get("Trim")
                             try:
-                                item.vehicle_year = int(res.get("ModelYear"))
+                                if hasattr(item, "vehicle_year"):
+                                    item.vehicle_year = int(res.get("ModelYear"))
                             except (ValueError, TypeError):
                                 pass
             except Exception as e:
@@ -152,46 +168,64 @@ async def fetch_marketcheck_valuation(db: Session, vin: str) -> Optional[float]:
     
     return None
 
-async def _persist_valuation(db: Session, item: Item, val_data: dict, used_query: str, target_roi: float) -> Valuation:
+async def _persist_valuation(db: Session, item: Any, val_data: dict, used_query: str, target_roi: float) -> Valuation:
+    from ..models import Item, ResearchItem, BidItem
     is_vehicle = item.category and item.category.startswith("Motor Pool") and "Parts" not in item.category
     
     # Persist sample cache
     sample_cache = EbaySampleCache(
-        item_id=item.id,
         query_signature=used_query,
         sample_size=val_data["initial_sample_size"],
         trimmed_median=val_data["trimmed_median"],
         mean=val_data["mean"],
         fetched_at=datetime.datetime.utcnow()
     )
+    
+    if isinstance(item, Item):
+        sample_cache.item_id = item.id
+    elif isinstance(item, ResearchItem):
+        sample_cache.research_item_id = item.id
+    elif isinstance(item, BidItem):
+        sample_cache.bid_item_id = item.id
+        
     db.add(sample_cache)
     db.flush()
     db.refresh(sample_cache)
     
-    raw_listings = val_data.get("raw_listings", [])
-    if raw_listings:
-        prices = [listing["price"] for listing in raw_listings]
-        avg_asking_price = sum(prices) / len(prices) if prices else 0
-        median_asking_price = statistics.median(prices) if prices else 0
-        price_range_low = min(prices) if prices else 0
-        price_range_high = max(prices) if prices else 0
-
+    # REQ-3.3: Store pre-calculated aggregation metrics and sample listings
+    if "raw_listings" in val_data:
         val_detail = ValuationDetail(
             sample_cache_id=sample_cache.id,
-            sample_listings=raw_listings,
-            avg_asking_price=avg_asking_price,
-            median_asking_price=median_asking_price,
-            price_range_low=price_range_low,
-            price_range_high=price_range_high
+            sample_listings=val_data["raw_listings"],
+            avg_asking_price=val_data.get("avg_asking_price", 0),
+            median_asking_price=val_data.get("median_asking_price", 0),
+            price_range_low=val_data.get("price_range_low", 0),
+            price_range_high=val_data.get("price_range_high", 0)
         )
+        if isinstance(item, ResearchItem):
+            val_detail.research_item_id = item.id
+        elif isinstance(item, BidItem):
+            val_detail.bid_item_id = item.id
+            
         db.add(val_detail)
         db.flush()
 
     # Check if valuation exists
-    valuation = db.query(Valuation).filter(Valuation.item_id == item.id).first()
-    if not valuation:
-        valuation = Valuation(item_id=item.id)
-        db.add(valuation)
+    if isinstance(item, Item):
+        valuation = db.query(Valuation).filter(Valuation.item_id == item.id).first()
+        if not valuation:
+            valuation = Valuation(item_id=item.id)
+            db.add(valuation)
+    elif isinstance(item, ResearchItem):
+        valuation = db.query(Valuation).filter(Valuation.research_item_id == item.id).first()
+        if not valuation:
+            valuation = Valuation(research_item_id=item.id)
+            db.add(valuation)
+    elif isinstance(item, BidItem):
+        valuation = db.query(Valuation).filter(Valuation.bid_item_id == item.id).first()
+        if not valuation:
+            valuation = Valuation(bid_item_id=item.id)
+            db.add(valuation)
 
     valuation.sample_cache_id = sample_cache.id
     valuation.est_market_value = val_data["est_market_value"]
@@ -277,9 +311,14 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     category_id = None
     buying_options = ["FIXED_PRICE"]
     
+    # REQ-3.2: Strict Condition Matching
+    # If the item has a normalized_condition_id, we use ONLY that.
+    # Otherwise, we fallback to a sensible range (1000, 2000, 3000).
+    condition_ids = [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
+
     if is_vehicle:
         category_id = "6001" 
-        condition_ids = ["3000"]
+        condition_ids = ["3000"] # Vehicles are almost always used in this context
         buying_options = ["FIXED_PRICE", "AUCTION"]
         
         new_queries = []
@@ -299,7 +338,6 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
     else:
         if item_class == "car_part":
             category_id = "6030"
-        condition_ids = [item.normalized_condition_id] if item.normalized_condition_id else ["1000", "2000", "3000"]
     
     val_data = None
     used_query = None
@@ -338,10 +376,9 @@ async def run_item_valuation(db: Session, item_id: int, target_roi: float = 0.30
         if not prices:
             continue
 
-        temp_val_data = calculate_valuation(prices, target_roi=target_roi, auction_premium=premium, is_vehicle=bool(is_vehicle))
+        temp_val_data = calculate_valuation(prices, raw_listings=raw_listings, target_roi=target_roi, auction_premium=premium, is_vehicle=bool(is_vehicle))
         if temp_val_data:
             val_data = temp_val_data
-            val_data["raw_listings"] = raw_listings
             used_query = query
             break
     if not val_data:

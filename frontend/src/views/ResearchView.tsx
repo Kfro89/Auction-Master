@@ -9,15 +9,17 @@ import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, 
 import { useCommandContext } from '../contexts/CommandContext';
 import type { Command } from '../contexts/CommandContext';
 import { CountdownTimer } from '../components/CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
+import { normalizeTags, getHighResImageUrl, formatAuctionDate, formatItemName } from '../utils/formatters';
 
-interface Item {
+interface ResearchItem {
   id: number;
   title: string;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
   lot_number: string;
   current_bid: number;
   end_time: string | null;
-  status: string;
   url: string;
   image_url: string;
   auction_house_key: string;
@@ -32,7 +34,6 @@ interface Item {
     sample_size?: number;
   };
   is_watched?: boolean;
-  is_user_bidding?: boolean;
 }
 
 
@@ -60,15 +61,31 @@ const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className
   'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
   'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
   'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
+  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
 const ResearchView: React.FC = () => {
   const { setContextCommands } = useCommandContext();
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<ResearchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isScraping, setIsScraping] = useState<boolean>(false);
-  const [scrapeProgress, setScrapeProgress] = useState<{ step: number, totalSteps: number, message: string, newItems: number }>({ step: 0, totalSteps: 0, message: '', newItems: 0 });
+  const [scrapeProgress, setScrapeProgress] = useState<{ 
+    stage: string,
+    message: string, 
+    new_items: number,
+    enriched: number,
+    valuated: number,
+    error_count: number,
+    last_error?: string 
+  }>({ 
+    stage: 'idle',
+    message: '', 
+    new_items: 0,
+    enriched: 0,
+    valuated: 0,
+    error_count: 0
+  });
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
   const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
@@ -92,20 +109,6 @@ const ResearchView: React.FC = () => {
       return next;
     });
   };
-
-  React.useEffect(() => {
-    setNewItemIds(prev => {
-      let changed = false;
-      const next = new Set(prev);
-      items.forEach(item => {
-        if (item.is_user_bidding && next.has(item.id)) {
-          next.delete(item.id);
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [items]);
 
   // Column Configuration State
   const [columnConfig, setColumnConfig] = useState<Record<string, ColumnConfig>>(() => {
@@ -220,7 +223,7 @@ const ResearchView: React.FC = () => {
   );
 
   // Modal State
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ResearchItem | null>(null);
   const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
 
   const fetchSettings = async () => {
@@ -256,7 +259,7 @@ const ResearchView: React.FC = () => {
     setBidSuccess(null);
     
     try {
-      const response = await fetch(`/api/items/${itemId}/bid`, {
+      const response = await fetch(`/api/research/${itemId}/bid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: Number(amount) })
@@ -276,7 +279,7 @@ const ResearchView: React.FC = () => {
         setBidSuccess("Bid placed successfully!");
         // Update item in local state
         setItems(prev => prev.map(item => 
-          selectedItem && item.id === selectedItem.id ? { ...item, current_bid: data.result?.new_bid || Number(amount), is_user_bidding: true } : item
+          selectedItem && item.id === selectedItem.id ? { ...item, current_bid: data.result?.new_bid || Number(amount) } : item
         ));
       }    } catch (err) {
       setBidError('Network error occurred while bidding.');
@@ -294,13 +297,13 @@ const ResearchView: React.FC = () => {
 
   const fetchItems = async () => {
     try {
-      const response = await fetch('/api/items/');
+      const response = await fetch('/api/research/');
       if (response.ok) {
         const data = await response.json();
         setItems(data);
       }
     } catch (error) {
-      console.error('Failed to fetch items:', error);
+      console.error('Failed to fetch research items:', error);
     } finally {
       setLoading(false);
     }
@@ -322,16 +325,19 @@ const ResearchView: React.FC = () => {
           const currentlyScraping = data.scrape?.status === 'active';
           if (currentlyScraping) {
             setScrapeProgress({
-              step: data.scrape.step || 0,
-              totalSteps: data.scrape.total_steps || 4,
-              message: data.scrape.message || 'Scanning...',
-              newItems: data.scrape.new_items || 0
+              stage: data.scrape.stage || 'discovery',
+              message: data.scrape.message || '',
+              new_items: data.scrape.new_items || 0,
+              enriched: data.scrape.enriched || 0,
+              valuated: data.scrape.valuated || 0,
+              error_count: data.scrape.error_count || 0,
+              last_error: data.scrape.last_error
             });
           }
           if (!currentlyScraping && isScrapingRef.current) {
             // Scrape just finished, let's fetch items and find new ones
             try {
-               const res = await fetch('/api/items/');
+               const res = await fetch('/api/research/');
                if (res.ok) {
                  const newData = await res.json();
                  setItems(prevItems => {
@@ -468,7 +474,7 @@ const ResearchView: React.FC = () => {
 
   const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/items/${itemId}/watch`, {
+      const response = await fetch(`/api/research/${itemId}/watch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_watched: !currentStatus })
@@ -535,7 +541,9 @@ const ResearchView: React.FC = () => {
       if (searchQuery) {
         const lowerQuery = searchQuery.toLowerCase();
         const ahName = AUCTION_HOUSE_MAP[item.auction_house_key]?.name.toLowerCase() || '';
-        passesSearch = item.title.toLowerCase().includes(lowerQuery) || 
+        const itemName = formatItemName(item).toLowerCase();
+        passesSearch = itemName.includes(lowerQuery) || 
+                       item.title.toLowerCase().includes(lowerQuery) || 
                        item.lot_number.toLowerCase().includes(lowerQuery) ||
                        ahName.includes(lowerQuery) ||
                        normalizeTags(item.tags).some(tag => 
@@ -558,16 +566,15 @@ const ResearchView: React.FC = () => {
       if (item.category && item.category.startsWith('Motor Pool') && !item.category.startsWith('Motor Pool Parts')) {
         passesMotorPoolCheck = false;
       }
-      
+
       let passesAuctionHouse = true;
       if (auctionHouseFilter) {
         passesAuctionHouse = item.auction_house_key === auctionHouseFilter;
       }
 
       return passesDateFilter && passesSearch && passesCategory && passesMotorPoolCheck && passesAuctionHouse;
-    });
-  }, [items, filter, searchQuery, parentCategoryFilter, subCategoryFilter, auctionHouseFilter]);
-
+      });
+      }, [items, filter, searchQuery, parentCategoryFilter, subCategoryFilter, auctionHouseFilter]);
   // Map items to include a flat ROI percentage for easier sorting
   const itemsWithComputedRoi = useMemo(() => {
     return filteredItems.map(item => {
@@ -680,16 +687,14 @@ const ResearchView: React.FC = () => {
           <>
             {isScraping ? (
               <div className="scrape-progress-container">
-                <div className="scrape-progress-bar-track">
-                  <div 
-                    className="scrape-progress-bar-fill"
-                    style={{ width: `${scrapeProgress.totalSteps > 0 ? (scrapeProgress.step / scrapeProgress.totalSteps) * 100 : 0}%` }}
-                  />
-                  <span className="scrape-progress-bar-label">
-                    {scrapeProgress.totalSteps > 0 ? `${Math.round((scrapeProgress.step / scrapeProgress.totalSteps) * 100)}%` : '0%'}
-                  </span>
+                <div className="scrape-progress-summary">
+                  <span className="stage-tag">{scrapeProgress.stage.replace('_', ' ').toUpperCase()}</span>
+                  <span className="count-tag new">Found: {scrapeProgress.new_items}</span>
+                  <span className="count-tag enriched">AI: {scrapeProgress.enriched}</span>
+                  <span className="count-tag valuated">Val: {scrapeProgress.valuated}</span>
+                  {scrapeProgress.error_count > 0 && <span className="count-tag error">Errors: {scrapeProgress.error_count}</span>}
                 </div>
-                <div className="scrape-progress-status">
+                <div className="scrape-progress-status" title={scrapeProgress.last_error}>
                   {scrapeProgress.message || 'Initializing scan...'}
                 </div>
               </div>
@@ -869,7 +874,7 @@ const ResearchView: React.FC = () => {
                     <td className="clickable-title" style={getColStyle('title')}>
                       <div className="title-content">
                         <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {item.title} <ExternalLink size={12} className="inline-icon"/>
+                          {formatItemName(item)} <ExternalLink size={12} className="inline-icon"/>
                         </a>
                       </div>
                     </td>
@@ -989,14 +994,14 @@ const ResearchView: React.FC = () => {
                 <div key={item.id} className="research-card">
                   <div className="research-card-image-container">
                     <div className="research-card-title-overlay">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={item.title}>
-                        {item.title}
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={formatItemName(item)}>
+                        {formatItemName(item)}
                       </a>
                     </div>
                     <img 
                       src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
                       className="research-card-image" 
-                      alt={item.title} 
+                      alt={formatItemName(item)} 
                       onClick={() => {
                         setSelectedItem(item);
                         clearNewStatus(item.id);

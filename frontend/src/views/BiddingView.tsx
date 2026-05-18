@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './BiddingView.css';
 import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
 import { useSortableData } from '../hooks/useSortableData';
-import { ArrowUpDown, RefreshCw, ChevronRight, Wallet, Gavel, Target, Archive, RotateCcw } from 'lucide-react';
+import { ArrowUpDown, RefreshCw, ChevronRight, Wallet, Gavel, Target, Archive, RotateCcw, AlignLeft, AlignCenter, AlignRight, Save, EyeOff } from 'lucide-react';
 import ItemDetailModal from '../components/ItemDetailModal';
 import LotSplitModal from '../components/LotSplitModal';
+import Tooltip from '../components/Tooltip';
+import { CountdownTimer } from '../components/CountdownTimer';
 import type { LotSplitData } from '../components/LotSplitModal';
-import { formatAuctionDate } from '../utils/formatters';
+import { formatAuctionDate, formatItemName } from '../utils/formatters';
 
 interface SampleListing {
   url: string;
@@ -15,24 +17,28 @@ interface SampleListing {
   condition: string;
 }
 
-interface Item {
+interface BidItem {
   id: number;
   title: string;
   lot_number: string;
-  current_bid: number;
+  current_bid_amount: number;
+  user_bid_amount: number;
+  user_proxy_bid: number;
+  user_bid_status: string;
   end_time: string;
-  status: string;
   url: string;
   image_url: string;
   auction_house_key?: string;
   category?: string;
   images?: string[];
-  is_user_bidding: boolean;
+  is_hidden_from_active: boolean;
   shipping_cost_est?: number;
   valuation?: {
     est_market_value: number;
     max_bid_for_target_roi: number;
     target_roi_pct: number;
+    search_query?: string;
+    sample_size?: number;
   };
   valuation_detail?: {
     avg_asking_price: number;
@@ -50,7 +56,32 @@ interface Item {
   computedRoi?: number | null;
   landedCost?: number;
   is_archived?: boolean;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
 }
+
+export interface ColumnConfig {
+  width: number;
+  align: 'left' | 'center' | 'right';
+}
+
+const DEFAULT_COLUMNS: Record<string, ColumnConfig> = {
+  image: { width: 60, align: 'center' },
+  title: { width: 300, align: 'left' },
+  lot: { width: 100, align: 'left' },
+  house: { width: 100, align: 'center' },
+  category: { width: 150, align: 'left' },
+  status: { width: 120, align: 'center' },
+  yourBid: { width: 110, align: 'center' },
+  proxyBid: { width: 130, align: 'center' },
+  estValue: { width: 110, align: 'center' },
+  maxBid: { width: 110, align: 'center' },
+  landedCost: { width: 110, align: 'center' },
+  roi: { width: 80, align: 'center' },
+  ends: { width: 150, align: 'center' },
+  actions: { width: 100, align: 'center' }
+};
 
 const getRowClass = (status?: string) => {
   switch(status) {
@@ -87,48 +118,161 @@ const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className
   'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
   'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
   'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
+  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
 const BiddingView: React.FC = () => {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<BidItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [auctionHouseFilter, setAuctionHouseFilter] = useState("");
   const [parentCategoryFilter, setParentCategoryFilter] = useState("");
   const [subCategoryFilter, setSubCategoryFilter] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const [targetMargins, setTargetMargins] = useState<Record<number, string | number>>({});
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = useState<BidItem | null>(null);
   const [comparables, setComparables] = useState<Record<number, any>>({});
   const [loadingComparables, setLoadingComparables] = useState<Record<number, boolean>>({});
   const [isValuating, setIsValuating] = useState(false);
   const [valuationStatus, setValuationStatus] = useState("");
   const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
   const [isLotSplitOpen, setIsLotSplitOpen] = useState(false);
-  const [itemToWin, setItemToWin] = useState<Item | null>(null);
+  const [itemToWin, setItemToWin] = useState<BidItem | null>(null);
 
-  const handleArchive = async (id: number, isArchived: boolean) => {
+  // Column Configuration State
+  const [columnConfig, setColumnConfig] = useState<Record<string, ColumnConfig>>(() => {
+    const saved = localStorage.getItem('biddingTableConfig');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_COLUMNS, ...parsed };
+      } catch (e) { }
+    }
+    return DEFAULT_COLUMNS;
+  });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizerRef = React.useRef<{ isResizing: boolean, colId: string | null, startX: number, startWidth: number }>({
+    isResizing: false,
+    colId: null,
+    startX: 0,
+    startWidth: 0
+  });
+
+  const handleHeaderMouseDown = () => {
+    if (isEditMode) return;
+    longPressTimer.current = setTimeout(() => {
+      setIsEditMode(true);
+    }, 600);
+  };
+
+  const handleHeaderMouseUpOrLeave = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const saveColumnConfig = () => {
+    localStorage.setItem('biddingTableConfig', JSON.stringify(columnConfig));
+    setIsEditMode(false);
+  };
+
+  const onResizeStart = (e: React.MouseEvent, colId: string) => {
+    e.stopPropagation();
+    resizerRef.current = {
+      isResizing: true,
+      colId,
+      startX: e.clientX,
+      startWidth: columnConfig[colId].width
+    };
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', onResizeEnd);
+  };
+
+  const onResizeMove = React.useCallback((e: MouseEvent) => {
+    if (!resizerRef.current.isResizing || !resizerRef.current.colId) return;
+    const diff = e.clientX - resizerRef.current.startX;
+    const newWidth = Math.max(40, resizerRef.current.startWidth + diff);
+    setColumnConfig(prev => ({
+      ...prev,
+      [resizerRef.current.colId!]: { ...prev[resizerRef.current.colId!], width: newWidth }
+    }));
+  }, []);
+
+  const onResizeEnd = React.useCallback(() => {
+    resizerRef.current.isResizing = false;
+    resizerRef.current.colId = null;
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', onResizeEnd);
+  }, [onResizeMove]);
+
+  const updateAlign = (e: React.MouseEvent, colId: string, align: 'left' | 'center' | 'right') => {
+    e.stopPropagation();
+    setColumnConfig(prev => ({
+      ...prev,
+      [colId]: { ...prev[colId], align }
+    }));
+  };
+
+  const getColStyle = (colId: string): React.CSSProperties => {
+    const col = columnConfig[colId] || DEFAULT_COLUMNS[colId] || { width: 100, align: 'left' };
+    return {
+      width: `${col.width}px`,
+      minWidth: `${col.width}px`,
+      maxWidth: `${col.width}px`,
+      textAlign: col.align
+    };
+  };
+
+  const renderHeaderCell = (colId: string, content: React.ReactNode, sortKey?: string, className: string = '') => (
+    <th 
+      onMouseDown={handleHeaderMouseDown}
+      onMouseUp={handleHeaderMouseUpOrLeave}
+      onMouseLeave={handleHeaderMouseUpOrLeave}
+      onClick={() => sortKey && !isEditMode ? requestSort(sortKey) : undefined}
+      className={`${className} ${sortKey && !isEditMode ? 'sortable' : ''}`}
+      style={{ ...getColStyle(colId) }}
+    >
+      <div className={`header-content ${(columnConfig[colId] || DEFAULT_COLUMNS[colId] || { align: 'left' }).align}`}>
+        {content} {sortKey && renderSortIcon(sortKey)}
+        
+        {isEditMode && (
+          <div className="edit-mode-controls">
+             <div className="align-buttons" onClick={e => e.stopPropagation()}>
+                <button onClick={(e) => updateAlign(e, colId, 'left')}><AlignLeft size={12}/></button>
+                <button onClick={(e) => updateAlign(e, colId, 'center')}><AlignCenter size={12}/></button>
+                <button onClick={(e) => updateAlign(e, colId, 'right')}><AlignRight size={12}/></button>
+             </div>
+             <div className="resizer-handle" onMouseDown={(e) => onResizeStart(e, colId)} />
+          </div>
+        )}
+      </div>
+    </th>
+  );
+
+  const handleHide = async (id: number, isHidden: boolean) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/items/${id}/archive`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/bidding/${id}/hide`, {
+        method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ is_archived: isArchived })
+        body: JSON.stringify({ is_hidden: isHidden })
       });
       if (response.ok) {
         await fetchItems();
       }
     } catch (e) {
-      console.error('Failed to archive item:', e);
+      console.error('Failed to hide item:', e);
     }
   };
 
-  const handleMarkWon = (item: Item) => {
+  const handleMarkWon = (item: BidItem) => {
     setItemToWin(item);
     setIsLotSplitOpen(true);
   };
@@ -137,9 +281,13 @@ const BiddingView: React.FC = () => {
     if (!itemToWin) return;
     
     try {
-      const response = await fetch(`/api/inventory/items/${itemToWin.id}/won`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/bidding/${itemToWin.id}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
         body: JSON.stringify(data)
       });
       
@@ -149,11 +297,11 @@ const BiddingView: React.FC = () => {
         setItemToWin(null);
         await fetchItems();
       } else {
-        alert('Failed to mark item as won');
+        alert('Failed to move item to Work Queue');
       }
     } catch (error) {
-      console.error('Error marking item as won:', error);
-      alert('Error marking item as won');
+      console.error('Error claiming won bid:', error);
+      alert('Error claiming won bid');
     }
   };
 
@@ -177,7 +325,7 @@ const BiddingView: React.FC = () => {
     setValuationStatus("Initializing AI analysis...");
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/valuate/${id}`, {
+      const response = await fetch(`/api/admin/valuate/${id}?type=bid`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -187,7 +335,6 @@ const BiddingView: React.FC = () => {
         if (selectedItem?.id === id) {
           setSelectedItem(prev => prev ? { ...prev, valuation: newValuation } : null);
         }
-        // Refresh comparables after valuation
         fetchComparables(id, true);
       }
     } catch (e) {
@@ -205,7 +352,7 @@ const BiddingView: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/items/${id}/valuation/margin`, {
+      const response = await fetch(`/api/bidding/${id}/valuation/margin`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -230,7 +377,7 @@ const BiddingView: React.FC = () => {
     setLoadingComparables(prev => ({...prev, [id]: true}));
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/items/${id}/comparables`, {
+      const response = await fetch(`/api/bidding/${id}/comparables`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -244,7 +391,7 @@ const BiddingView: React.FC = () => {
     }
   };
 
-  const openItemDetail = (item: Item) => {
+  const openItemDetail = (item: BidItem) => {
     setSelectedItem(item);
     fetchComparables(item.id);
   };
@@ -255,17 +402,17 @@ const BiddingView: React.FC = () => {
 
   const fetchItems = React.useCallback(async () => {
     try {
-      const response = await fetch(`/api/items/?show_archived=${showArchived}`);
+      const response = await fetch(`/api/bidding/?show_hidden=${showHidden}`);
       if (response.ok) {
         const data = await response.json();
-        setItems(data.filter((item: Item) => item.is_user_bidding));
+        setItems(data);
       }
     } catch (error) {
       console.error('Failed to fetch bidding items:', error);
     } finally {
       setLoading(false);
     }
-  }, [showArchived]);
+  }, [showHidden]);
 
   const refreshActiveBids = async () => {
     setRefreshing(true);
@@ -290,19 +437,17 @@ const BiddingView: React.FC = () => {
     fetchSettings();
     const interval = setInterval(fetchItems, 30000); // Poll every 30s
     return () => clearInterval(interval);
-  }, [showArchived, fetchItems]);
+  }, [showHidden, fetchItems]);
 
   const { totalCurrentBids, totalUserBids, totalMaxExposure } = useMemo(() => {
     let tCurrent = 0;
     let tUser = 0;
     let tExposure = 0;
     items.forEach(item => {
-      if (item.is_archived) return; // Skip archived items
-      if (item.user_bids) {
-        tCurrent += item.user_bids.current_bid_amount || 0;
-        tUser += item.user_bids.user_bid_amount || 0; 
-        tExposure += item.user_bids.user_proxy_bid || 0;
-      }
+      if (item.is_hidden_from_active) return; 
+      tCurrent += item.current_bid_amount || 0;
+      tUser += item.user_bid_amount || 0; 
+      tExposure += item.user_proxy_bid || 0;
     });
     return { totalCurrentBids: tCurrent, totalUserBids: tUser, totalMaxExposure: tExposure };
   }, [items]);
@@ -341,7 +486,7 @@ const BiddingView: React.FC = () => {
       // Search Query
       if (searchQuery) {
         const lowerQuery = searchQuery.toLowerCase();
-        const matchesSearch = item.title.toLowerCase().includes(lowerQuery) || 
+        const matchesSearch = formatItemName(item).toLowerCase().includes(lowerQuery) || 
                              item.lot_number.toLowerCase().includes(lowerQuery);
         if (!matchesSearch) return false;
       }
@@ -365,7 +510,7 @@ const BiddingView: React.FC = () => {
   const itemsWithComputedRoi = useMemo(() => {
     return filteredItems.map(item => {
       let roi = null;
-      const effectiveBid = item.user_bids?.user_proxy_bid ?? item.current_bid;
+      const effectiveBid = item.user_proxy_bid ?? item.current_bid_amount;
       const shippingCost = item.shipping_cost_est || 0;
       const buyerPremium = effectiveBid * 0.15;
       const landedCost = effectiveBid + shippingCost + buyerPremium;
@@ -427,10 +572,10 @@ const BiddingView: React.FC = () => {
       <section className="grid-section">
         <FilterBar title="My Bids">
           <button 
-            className={`saas-input whitespace-nowrap px-4 transition-colors ${showArchived ? 'bg-indigo-600/40 border-indigo-500/50 text-white' : 'hover:bg-white/5'}`}
-            onClick={() => setShowArchived(!showArchived)}
+            className={`saas-input whitespace-nowrap px-4 transition-colors ${showHidden ? 'bg-indigo-600/40 border-indigo-500/50 text-white' : 'hover:bg-white/5'}`}
+            onClick={() => setShowHidden(!showHidden)}
           >
-            {showArchived ? 'Hide Archived' : 'Show Archived'}
+            {showHidden ? 'Hide Hidden' : 'Show Hidden'}
           </button>
           <select 
             className="saas-input"
@@ -476,41 +621,22 @@ const BiddingView: React.FC = () => {
         </FilterBar>
         <div className="glass-panel" style={{ position: 'relative' }}>
           <table className="dense-grid">
-            <thead>
+            <thead className={isEditMode ? 'edit-mode' : ''}>
               <tr>
-                <th>Img</th>
-                <th onClick={() => requestSort('title')} className="sortable">
-                  <div className="header-content left">Title {renderSortIcon('title')}</div>
-                </th>
-                <th onClick={() => requestSort('lot_number')} className="sortable">
-                  <div className="header-content left">Lot {renderSortIcon('lot_number')}</div>
-                </th>
-                <th onClick={() => requestSort('auction_house_key')} className="sortable">
-                  <div className="header-content center">House {renderSortIcon('auction_house_key')}</div>
-                </th>
-                <th onClick={() => requestSort('category')} className="sortable">
-                  <div className="header-content left">Category {renderSortIcon('category')}</div>
-                </th>
-                <th className="text-center">Status</th>
-                <th onClick={() => requestSort('user_bids.user_bid_amount')} className="sortable">
-                  <div className="header-content center">Your Bid {renderSortIcon('user_bids.user_bid_amount')}</div>
-                </th>
-                <th onClick={() => requestSort('user_bids.user_proxy_bid')} className="sortable">
-                  <div className="header-content center">Proxy Bid Value {renderSortIcon('user_bids.user_proxy_bid')}</div>
-                </th>
-                <th onClick={() => requestSort('valuation.max_bid_for_target_roi')} className="sortable">
-                  <div className="header-content center">Max Bid {renderSortIcon('valuation.max_bid_for_target_roi')}</div>
-                </th>
-                <th onClick={() => requestSort('landedCost')} className="sortable">
-                  <div className="header-content center">Landed Cost {renderSortIcon('landedCost')}</div>
-                </th>
-                <th onClick={() => requestSort('computedRoi')} className="sortable">
-                  <div className="header-content center">ROI {renderSortIcon('computedRoi')}</div>
-                </th>
-                <th onClick={() => requestSort('end_time')} className="sortable">
-                  <div className="header-content center">Ends {renderSortIcon('end_time')}</div>
-                </th>
-                <th className="w-16 text-center">Actions</th>
+                {renderHeaderCell('image', 'Img')}
+                {renderHeaderCell('title', 'Title', 'title')}
+                {renderHeaderCell('lot', 'Lot', 'lot_number')}
+                {renderHeaderCell('house', 'House', 'auction_house_key')}
+                {renderHeaderCell('category', 'Category', 'category')}
+                {renderHeaderCell('status', 'Status', undefined, 'text-center')}
+                {renderHeaderCell('yourBid', 'Your Bid', 'user_bid_amount')}
+                {renderHeaderCell('proxyBid', 'Proxy Bid Value', 'user_proxy_bid')}
+                {renderHeaderCell('estValue', 'Est. Value', 'valuation.est_market_value')}
+                {renderHeaderCell('maxBid', 'Max Bid', 'valuation.max_bid_for_target_roi')}
+                {renderHeaderCell('landedCost', 'Landed Cost', 'landedCost')}
+                {renderHeaderCell('roi', 'ROI', 'computedRoi')}
+                {renderHeaderCell('ends', 'Ends', 'end_time')}
+                {renderHeaderCell('actions', 'Actions', undefined, 'w-16 text-center')}
               </tr>
             </thead>
             <tbody>
@@ -518,52 +644,87 @@ const BiddingView: React.FC = () => {
                 return (
                   <tr 
                     key={item.id} 
-                    className={`bidding-row transition-colors cursor-pointer hover:bg-white/5 ${getRowClass(item.user_bids?.user_bid_status)} ${item.is_archived ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                    className={`bidding-row transition-colors cursor-pointer hover:bg-white/5 ${getRowClass(item.user_bid_status)} ${item.is_archived ? 'opacity-60 grayscale-[0.5]' : ''}`}
                     onClick={() => openItemDetail(item)}
                   >
-                    <td>
+                    <td style={getColStyle('image')}>
                       <img 
                         src={item.image_url || '/placeholder.png'} 
                         className="grid-thumb rounded border border-white/10" 
-                        alt="" 
+                        alt={formatItemName(item)} 
                       />
                     </td>
-                    <td className="title-cell">
-                      <span className="whitespace-normal break-words" title={item.title}>{item.title}</span>
+                    <td className="title-cell" style={getColStyle('title')}>
+                      <span className="whitespace-normal break-words" title={formatItemName(item)}>{formatItemName(item)}</span>
                     </td>
-                    <td className="mono">{item.lot_number}</td>
-                    <td className="text-center">
+                    <td className="mono" style={getColStyle('lot')}>{item.lot_number}</td>
+                    <td className="text-center" style={getColStyle('house')}>
                       <span className={`source-badge ${AUCTION_HOUSE_MAP[item.auction_house_key || '']?.className || 'source-default'}`}>
                         {AUCTION_HOUSE_MAP[item.auction_house_key || '']?.short || '???'}
                       </span>
                     </td>
-                    <td>
+                    <td style={getColStyle('category')}>
                       {item.category && <span className="category-badge">{item.category}</span>}
                     </td>
-                    <td className="text-center">
-                      <StatusPill status={item.user_bids?.user_bid_status} />
+                    <td className="text-center" style={getColStyle('status')}>
+                      <StatusPill status={item.user_bid_status} />
                     </td>
-                    <td className="bid-cell">{item.user_bids?.user_bid_amount !== undefined ? `$${item.user_bids.user_bid_amount.toFixed(2)}` : '--'}</td>
-                    <td>{item.user_bids?.user_proxy_bid !== undefined ? `$${item.user_bids.user_proxy_bid.toFixed(2)}` : '--'}</td>
-                    <td>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                    <td>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
-                    <td>{item.computedRoi !== null ? `${Math.round(item.computedRoi)}%` : '--'}</td>
-                    <td className="timer-text">{formatAuctionDate(item.end_time, timezone)}</td>
-                    <td className="text-center">
+                    <td className="bid-cell" style={getColStyle('yourBid')}>{item.user_bid_amount !== undefined ? `$${item.user_bid_amount.toFixed(2)}` : '--'}</td>
+                    <td style={getColStyle('proxyBid')}>{item.user_proxy_bid !== undefined ? `$${item.user_proxy_bid.toFixed(2)}` : '--'}</td>
+                    <td className="text-center" style={getColStyle('estValue')}>
+                      {item.valuation ? (
+                        <Tooltip text={
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', minWidth: '150px', padding: '4px' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Query</div>
+                            <div style={{ fontWeight: 600, color: 'white', whiteSpace: 'normal', lineHeight: 1.3 }}>"{item.valuation.search_query || 'Unknown'}"</div>
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
+                            <div style={{ fontWeight: 500, color: 'white' }}>{item.valuation.sample_size || 0} comparable items</div>
+                          </div>
+                        }>
+                          <span className="text-emerald-600 font-semibold cursor-help border-b border-dashed border-emerald-600/30">
+                            ${item.valuation.est_market_value.toFixed(2)}
+                          </span>
+                        </Tooltip>
+                      ) : '--'}
+                    </td>
+                    <td style={getColStyle('maxBid')}>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
+                    <td style={getColStyle('landedCost')}>{item.landedCost !== undefined ? `$${item.landedCost.toFixed(2)}` : '--'}</td>
+                    <td style={getColStyle('roi')}>{item.computedRoi !== null ? `${Math.round(item.computedRoi)}%` : '--'}</td>
+                    <td className="timer-text" style={getColStyle('ends')}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <CountdownTimer endTime={item.end_time} className="countdown-main" endedText="Ending Now" endedClassName="ending-now" />
+                        <span style={{ fontSize: '0.7rem', opacity: 0.7, fontWeight: 400 }}>
+                          {formatAuctionDate(item.end_time, timezone)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="text-center" style={getColStyle('actions')}>
                       <div className="flex items-center justify-center gap-2">
-                        {(['lost', 'loss', 'outbid', 'outbid_near', 'reserve_not_met'].includes(item.user_bids?.user_bid_status || '') || item.is_archived) && (
+                        {item.user_bid_status === 'won' && (
+                          <button 
+                            className="p-1 hover:bg-green-500/20 rounded transition-colors text-green-500"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkWon(item);
+                            }}
+                            title="Move to Work Queue"
+                          >
+                            <ChevronRight size={20} />
+                          </button>
+                        )}
+                        {(['lost', 'loss', 'outbid', 'outbid_near', 'reserve_not_met'].includes(item.user_bid_status || '')) && (
                           <button 
                             className="p-1 hover:bg-white/10 rounded transition-colors text-white/70 hover:text-white"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleArchive(item.id, !item.is_archived);
+                              handleHide(item.id, true);
                             }}
-                            title={item.is_archived ? "Unarchive" : "Archive"}
+                            title="Hide from active"
                           >
-                            {item.is_archived ? <RotateCcw size={16} /> : <Archive size={16} />}
+                            <EyeOff size={16} />
                           </button>
                         )}
-                        <ChevronRight size={16} className="opacity-50" />
                       </div>
                     </td>
                   </tr>
@@ -571,11 +732,16 @@ const BiddingView: React.FC = () => {
               })}
             </tbody>
           </table>
+          {isEditMode && (
+            <button className="floating-save-btn" onClick={saveColumnConfig} title="Save Column Layout">
+              <Save size={24} />
+            </button>
+          )}
         </div>
       </section>
 
       <ItemDetailModal 
-        item={selectedItem} 
+        item={selectedItem as any} 
         isOpen={!!selectedItem} 
         onClose={() => setSelectedItem(null)} 
         viewContext="bidding" 
@@ -589,7 +755,7 @@ const BiddingView: React.FC = () => {
         onPersistMargin={() => selectedItem && persistMarginChange(selectedItem.id)}
         userTimezone={timezone}
         onMarkWon={() => selectedItem && handleMarkWon(selectedItem)}
-        onArchive={(id, isArchived) => handleArchive(id, isArchived)}
+        onArchive={(id, isArchived) => handleHide(id, isArchived)}
       />
 
       {itemToWin && (
@@ -597,7 +763,8 @@ const BiddingView: React.FC = () => {
           isOpen={isLotSplitOpen}
           onClose={() => setIsLotSplitOpen(false)}
           onConfirm={confirmMarkWon}
-          itemTitle={itemToWin.title}
+          itemTitle={formatItemName(itemToWin)}
+          estimatedValue={itemToWin.valuation?.est_market_value}
         />
       )}
     </ViewContainer>

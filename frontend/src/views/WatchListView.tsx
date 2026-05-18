@@ -23,20 +23,22 @@ import {
   AlignRight,
   Save
   } from 'lucide-react';import { CountdownTimer } from '../components/CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
+import { normalizeTags, getHighResImageUrl, formatAuctionDate, formatItemName } from '../utils/formatters';
 
-interface Item {
+interface ResearchItem {
   id: number;
   title: string;
   lot_number: string;
   current_bid: number;
   end_time: string | null;
-  status: string;
   url: string;
   image_url: string;
   auction_house_key: string;
   category?: string;
   tags?: any;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
   valuation?: {
     est_market_value: number;
     max_bid_for_target_roi: number;
@@ -72,11 +74,12 @@ const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className
   'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
   'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
   'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
+  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
 const WatchListView: React.FC = () => {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<ResearchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
   const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
@@ -228,11 +231,11 @@ const WatchListView: React.FC = () => {
   const [subCategoryFilter, setSubCategoryFilter] = useState<string>('');
   const [auctionHouseFilter, setAuctionHouseFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ResearchItem | null>(null);
 
   const fetchWatchlist = async () => {
     try {
-      const response = await fetch('/api/items/watchlist');
+      const response = await fetch('/api/research/watchlist');
       if (response.ok) {
         const data = await response.json();
         setItems(data);
@@ -301,7 +304,7 @@ const WatchListView: React.FC = () => {
     setLoadingComparables(prev => ({...prev, [id]: true}));
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/items/${id}/comparables`, {
+      const response = await fetch(`/api/research/${id}/comparables`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -315,7 +318,7 @@ const WatchListView: React.FC = () => {
     }
   };
 
-  const openItemDetail = (item: Item) => {
+  const openItemDetail = (item: ResearchItem) => {
     setSelectedItem(item);
     fetchComparables(item.id);
   };
@@ -331,7 +334,7 @@ const WatchListView: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/items/${id}/valuation/margin`, {
+      const response = await fetch(`/api/research/${id}/valuation/margin`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -353,7 +356,7 @@ const WatchListView: React.FC = () => {
 
   const removeFromWatchlist = async (itemId: number) => {
     try {
-      const response = await fetch(`/api/items/${itemId}/watch`, {
+      const response = await fetch(`/api/research/${itemId}/watch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_watched: false })
@@ -373,7 +376,9 @@ const WatchListView: React.FC = () => {
       if (searchQuery) {
         const lowerQuery = searchQuery.toLowerCase();
         const ahName = AUCTION_HOUSE_MAP[item.auction_house_key]?.name.toLowerCase() || '';
-        passesSearch = item.title.toLowerCase().includes(lowerQuery) || 
+        const itemName = formatItemName(item).toLowerCase();
+        passesSearch = itemName.includes(lowerQuery) ||
+                       item.title.toLowerCase().includes(lowerQuery) || 
                        item.lot_number.toLowerCase().includes(lowerQuery) ||
                        ahName.includes(lowerQuery) ||
                        normalizeTags(item.tags).some(tag => 
@@ -607,7 +612,7 @@ const WatchListView: React.FC = () => {
                     <td className="clickable-title" style={getColStyle('title')}>
                       <div className="title-content">
                         <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {item.title} <ExternalLink size={12} className="inline-icon"/>
+                          {formatItemName(item)} <ExternalLink size={12} className="inline-icon"/>
                         </a>
                       </div>
                     </td>
@@ -730,14 +735,14 @@ const WatchListView: React.FC = () => {
                       <X size={16} />
                     </button>
                     <div className="research-card-title-overlay">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={item.title}>
-                        {item.title}
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={formatItemName(item)}>
+                        {formatItemName(item)}
                       </a>
                     </div>
                     <img 
                       src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
                       className="research-card-image" 
-                      alt={item.title} 
+                      alt={formatItemName(item)} 
                       onClick={() => openItemDetail(item)}
                     />
                     <div className="watch-timer-overlay">

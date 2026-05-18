@@ -11,9 +11,8 @@ from .auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 # For now, we'll let Alembic handle migrations, but ensure tables are created
 # Base.metadata.create_all(bind=engine)
 
-from .routers import admin, items, inventory, credentials, packaging, ebay, expenses, analytics
-from .services.valuation_worker import process_pending_valuations
-from .services.ingestion import ingest_auctioneer_software, ingest_public_surplus, ingest_bidwrangler
+from .routers import admin, items, inventory, credentials, packaging, ebay, expenses, analytics, research, bidding
+from .services.pipeline import run_full_ingestion_pipeline
 from .database import SessionLocal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -25,9 +24,9 @@ def prune_watchlist():
         fourteen_days_ago = datetime.now(pytz.utc) - timedelta(days=14)
         
         # Find watched items that ended more than 14 days ago and update them in bulk
-        updated_count = db.query(models.Item).filter(
-            models.Item.is_watched == True,
-            models.Item.end_time < fourteen_days_ago
+        updated_count = db.query(models.ResearchItem).filter(
+            models.ResearchItem.is_watched == True,
+            models.ResearchItem.end_time < fourteen_days_ago
         ).update({"is_watched": False}, synchronize_session=False)
         
         db.commit()
@@ -45,32 +44,15 @@ def prune_closed_auctions():
     logger = logging.getLogger(__name__)
     db: Session = SessionLocal()
     try:
-        # Define threshold for expired auctions/items (e.g., 24 hours ago)
-        threshold = datetime.now(pytz.utc) - timedelta(hours=24)
-        
-        # We delete items where end_time has passed and user has NOT bid on them
-        # (and they are not watched, or we let watched items expire via prune_watchlist later)
-        # Wait, if they are watched, should we delete? The user only specified retaining if they bid.
-        # But we'll preserve watched as well just so watchlist doesn't break, and they get deleted 
-        # when prune_watchlist removes the flag.
-        
-        items_to_delete = db.query(models.Item).filter(
-            models.Item.end_time < threshold,
-            models.Item.is_user_bidding == False,
-            models.Item.is_watched == False
-        ).all()
-        
-        deleted_items_count = len(items_to_delete)
-        for item in items_to_delete:
-            db.delete(item)
-            
-        db.commit()
+        from .services.research_service import prune_expired_items
+        deleted_count = prune_expired_items(db)
         
         # Clean up empty auctions that have expired
-        # (An auction might have items kept because user bid on them, so the auction stays)
+        threshold = datetime.now(pytz.utc) - timedelta(hours=24)
         empty_auctions = db.query(models.Auction).filter(
             models.Auction.end_time < threshold,
-            ~models.Auction.items.any()
+            ~models.Auction.research_items.any(),
+            ~models.Auction.bid_items.any()
         ).all()
         
         for auction in empty_auctions:
@@ -78,8 +60,8 @@ def prune_closed_auctions():
             
         db.commit()
         
-        if deleted_items_count > 0 or empty_auctions:
-            logger.info(f"Pruned {deleted_items_count} closed items and {len(empty_auctions)} empty auctions.")
+        if deleted_count > 0 or empty_auctions:
+            logger.info(f"Pruned {deleted_count} closed research items and {len(empty_auctions)} empty auctions.")
             
     except Exception as e:
         db.rollback()
@@ -90,6 +72,8 @@ def prune_closed_auctions():
 app = FastAPI(title="Auction Arbitrage API")
 
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(research.router, prefix="/api/research", tags=["research"])
+app.include_router(bidding.router, prefix="/api/bidding", tags=["bidding"])
 app.include_router(items.router, prefix="/api/items", tags=["items"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["inventory"])
 app.include_router(credentials.router, prefix="/api/credentials", tags=["credentials"])
@@ -126,7 +110,9 @@ async def start_scheduler():
     try:
         defaults = {
             "public_surplus_zip": "80543",
-            "public_surplus_radius": "200"
+            "public_surplus_radius": "200",
+            "govdeals_zip": "80543",
+            "govdeals_radius": "100"
         }
         for k, v in defaults.items():
             if not db.query(models.Setting).filter_by(key=k).first():
@@ -142,20 +128,29 @@ async def start_scheduler():
         db = SessionLocal()
         try:
             print("Starting background sweep and valuate job...")
-            await ingest_auctioneer_software(db, "https://www.whitleyauction.com", "rmeb", "Whitley Auction", 18.5)
-            await ingest_auctioneer_software(db, "https://bid.rollerauction.com", "rol", "Roller Auction", 13.0)
-            await ingest_bidwrangler(db, "https://bid.dickensheet.com", "dickensheet", "Dickensheet")
-            await ingest_public_surplus(db)
-            await process_pending_valuations(db)
+            await run_full_ingestion_pipeline(db)
             print("Finished background sweep and valuate job.")
         except Exception as e:
             print(f"Error in background job: {e}")
         finally:
             db.close()
 
+    async def win_verification_job():
+        db = SessionLocal()
+        try:
+            from .services.win_verification import verify_and_migrate_wins
+            print("Starting win verification job...")
+            await verify_and_migrate_wins(db)
+            print("Finished win verification job.")
+        except Exception as e:
+            print(f"Error in win verification job: {e}")
+        finally:
+            db.close()
+
     scheduler.add_job(sweep_and_valuate_job, "interval", minutes=60)
     scheduler.add_job(prune_watchlist, 'cron', hour=0, minute=0) # Run daily at midnight UTC
     scheduler.add_job(prune_closed_auctions, 'cron', hour=1, minute=0) # Run daily at 1 AM UTC
+    scheduler.add_job(win_verification_job, "interval", minutes=30)
     scheduler.start()
     print("Background valuation scheduler started.")
 
