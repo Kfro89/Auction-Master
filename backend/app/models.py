@@ -17,6 +17,8 @@ class AuctionHouse(Base):
 
     auctions = relationship("Auction", back_populates="auction_house")
     items = relationship("Item", back_populates="auction_house")
+    research_items = relationship("ResearchItem", back_populates="auction_house")
+    bid_items = relationship("BidItem", back_populates="auction_house")
 
 
 class Auction(Base):
@@ -35,6 +37,74 @@ class Auction(Base):
 
     auction_house = relationship("AuctionHouse", back_populates="auctions")
     items = relationship("Item", back_populates="auction", cascade="all, delete-orphan")
+    research_items = relationship("ResearchItem", back_populates="auction", cascade="all, delete-orphan")
+    bid_items = relationship("BidItem", back_populates="auction", cascade="all, delete-orphan")
+
+
+class ResearchItem(Base):
+    __tablename__ = "research_items"
+    id = Column(Integer, primary_key=True, index=True)
+    auction_house_id = Column(Integer, ForeignKey("auction_houses.id"), nullable=False)
+    auction_id = Column(Integer, ForeignKey("auctions.id"), nullable=True)
+    external_id = Column(String, index=True, nullable=False)
+    lot_number = Column(String)
+    title = Column(String, nullable=False)
+    description = Column(String)
+    current_bid = Column(Float, default=0.0)
+    end_time = Column(DateTime(timezone=True))
+    url = Column(String)
+    image_url = Column(String)
+    images = Column(JSON, default=list)
+    first_seen_at = Column(DateTime(timezone=True))
+    last_seen_at = Column(DateTime(timezone=True))
+    category = Column(String)
+    product_name = Column(String)
+    condition = Column(String)
+    brand = Column(String)
+    tags = Column(JSON, default=list)
+    search_queries = Column(JSON, default=list)
+    normalized_condition_id = Column(String)
+    is_watched = Column(Boolean, default=False)
+    is_archived = Column(Boolean, default=False)
+    processing_status = Column(String, default='pending_enrichment')
+
+    auction_house = relationship("AuctionHouse", back_populates="research_items")
+    auction = relationship("Auction", back_populates="research_items")
+    valuation = relationship("Valuation", back_populates="research_item", uselist=False, cascade="all, delete-orphan")
+    sample_caches = relationship("EbaySampleCache", back_populates="research_item", cascade="all, delete-orphan")
+
+
+class BidItem(Base):
+    __tablename__ = "bid_items"
+    id = Column(Integer, primary_key=True, index=True)
+    auction_house_id = Column(Integer, ForeignKey("auction_houses.id"), nullable=False)
+    auction_id = Column(Integer, ForeignKey("auctions.id"), nullable=True)
+    external_id = Column(String, index=True, nullable=False)
+    lot_number = Column(String)
+    title = Column(String, nullable=False)
+    description = Column(String)
+    url = Column(String)
+    image_url = Column(String)
+    images = Column(JSON, default=list)
+    current_bid_amount = Column(Float, default=0.0)
+    user_bid_amount = Column(Float, default=0.0)
+    user_proxy_bid = Column(Float, default=0.0)
+    user_bid_status = Column(String) # winning, outbid, won, lost
+    end_time = Column(DateTime(timezone=True))
+    is_hidden_from_active = Column(Boolean, default=False)
+    category = Column(String)
+    product_name = Column(String)
+    condition = Column(String)
+    brand = Column(String)
+    tags = Column(JSON, default=list)
+    search_queries = Column(JSON, default=list)
+    normalized_condition_id = Column(String)
+    processing_status = Column(String, default='pending_enrichment')
+
+    auction_house = relationship("AuctionHouse", back_populates="bid_items")
+    auction = relationship("Auction", back_populates="bid_items")
+    valuation = relationship("Valuation", back_populates="bid_item", uselist=False, cascade="all, delete-orphan")
+    sample_caches = relationship("EbaySampleCache", back_populates="bid_item", cascade="all, delete-orphan")
 
 
 class Item(Base):
@@ -61,6 +131,8 @@ class Item(Base):
     last_seen_at = Column(DateTime(timezone=True))
     
     # Valuation parameters
+    product_name = Column(String)
+    condition = Column(String)
     raw_condition = Column(String)
     normalized_condition_id = Column(String) # eBay condition ID
     brand = Column(String)
@@ -86,10 +158,12 @@ class Item(Base):
     images = Column(JSON, default=list)
     shipping_cost_est = Column(Float, default=0.0)
     user_bids = relationship("UserBidActivity", back_populates="item", uselist=False, cascade="all, delete-orphan")
+    inventory_parent_lot = relationship("InventoryParentLot", back_populates="item", uselist=False)
     
     is_user_bidding = Column(Boolean, default=False)
     is_watched = Column(Boolean, default=False, server_default='false')
     is_archived = Column(Boolean, default=False, server_default='false', nullable=False)
+    processing_status = Column(String, default='pending_enrichment')
 
 
 class Setting(Base):
@@ -110,7 +184,9 @@ class ConditionMap(Base):
 class EbaySampleCache(Base):
     __tablename__ = "ebay_sample_cache"
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=True, index=True)
+    research_item_id = Column(Integer, ForeignKey("research_items.id"), nullable=True, index=True)
+    bid_item_id = Column(Integer, ForeignKey("bid_items.id"), nullable=True, index=True)
     query_signature = Column(String, index=True, nullable=False)
     sample_size = Column(Integer)
     trimmed_median = Column(Float)
@@ -119,12 +195,18 @@ class EbaySampleCache(Base):
     confidence_score = Column(Float)
     fetched_at = Column(DateTime(timezone=True))
     ttl = Column(DateTime(timezone=True))
+    
+    item = relationship("Item", back_populates="sample_caches")
+    research_item = relationship("ResearchItem", back_populates="sample_caches")
+    bid_item = relationship("BidItem", back_populates="sample_caches")
     valuation_detail = relationship("ValuationDetail", back_populates="sample_cache", uselist=False, cascade="all, delete-orphan")
 
 class Valuation(Base):
     __tablename__ = "valuations"
     id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=True, index=True)
+    research_item_id = Column(Integer, ForeignKey("research_items.id"), nullable=True, index=True)
+    bid_item_id = Column(Integer, ForeignKey("bid_items.id"), nullable=True, index=True)
     sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id"))
     est_market_value = Column(Float)
     market_adjustment_factor_applied = Column(Float)
@@ -133,6 +215,8 @@ class Valuation(Base):
     computed_at = Column(DateTime(timezone=True))
 
     item = relationship("Item", back_populates="valuation")
+    research_item = relationship("ResearchItem", back_populates="valuation")
+    bid_item = relationship("BidItem", back_populates="valuation")
     sample_cache = relationship("EbaySampleCache")
 
 
@@ -142,6 +226,8 @@ class InventoryItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     barcode = Column(String, index=True)
     title = Column(String)
+    product_name = Column(String)
+    condition = Column(String)
     drafted_title = Column(String)
     drafted_description = Column(String)
     ebay_category_id = Column(String)
@@ -158,6 +244,7 @@ class InventoryItem(Base):
     length = Column(Float)
     width = Column(Float)
     height = Column(Float)
+    shipping_carrier = Column(String)
     storage_location = Column(String)
     tracking_number = Column(String)
     qr_code_url = Column(String)
@@ -174,16 +261,18 @@ class InventoryParentLot(Base):
     __tablename__ = "inventory_parent_lots"
     id = Column(Integer, primary_key=True, index=True)
     source_item_id = Column(Integer, ForeignKey("items.id"), nullable=True)
+    source_bid_item_id = Column(Integer, ForeignKey("bid_items.id"), nullable=True)
     title = Column(String, nullable=False)
     hammer_price = Column(Float, default=0.0)
     buyer_premium_pct = Column(Float, default=0.0)
     tax_rate = Column(Float, default=0.0)
     misc_fees = Column(Float, default=0.0)
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
-    
+
+    item = relationship("Item", back_populates="inventory_parent_lot")
+    bid_item = relationship("BidItem")
     items = relationship("InventoryItem", back_populates="parent_lot")
     cost_line_items = relationship("InventoryCostLineItem", back_populates="parent_lot")
-
 
 class InventoryCostLineItem(Base):
     __tablename__ = "inventory_cost_line_items"
@@ -231,6 +320,8 @@ class ValuationDetail(Base):
     __tablename__ = "valuation_details"
     id = Column(Integer, primary_key=True, index=True)
     sample_cache_id = Column(Integer, ForeignKey("ebay_sample_cache.id", ondelete="CASCADE"), nullable=False, unique=True)
+    research_item_id = Column(Integer, ForeignKey("research_items.id"), nullable=True, index=True)
+    bid_item_id = Column(Integer, ForeignKey("bid_items.id"), nullable=True, index=True)
     sample_listings = Column(JSON, default=list)
     avg_asking_price = Column(Float)
     median_asking_price = Column(Float)
@@ -239,6 +330,8 @@ class ValuationDetail(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
     
     sample_cache = relationship("EbaySampleCache", back_populates="valuation_detail")
+    research_item = relationship("ResearchItem")
+    bid_item = relationship("BidItem")
 
 
 class EbayListing(Base):
