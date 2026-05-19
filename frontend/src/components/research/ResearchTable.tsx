@@ -62,7 +62,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
   const tags = useMemo(() => {
     const allTags = new Set<string>()
     items.forEach(i => {
-      if (i.tags) i.tags.forEach(t => allTags.add(t))
+      if (Array.isArray(i.tags)) i.tags.forEach(t => allTags.add(t))
     })
     return Array.from(allTags).sort()
   }, [items])
@@ -78,7 +78,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
       data = data.filter((i) => i.category === selectedCategory)
     }
     if (selectedTag !== "all") {
-      data = data.filter((i) => i.tags?.includes(selectedTag))
+      data = data.filter((i) => Array.isArray(i.tags) && i.tags.includes(selectedTag))
     }
     if (search) {
       const q = search.toLowerCase()
