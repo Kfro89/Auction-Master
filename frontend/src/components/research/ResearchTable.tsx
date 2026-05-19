@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-table"
 import { motion } from "framer-motion"
 import { Star } from "lucide-react"
+import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -22,7 +23,7 @@ import { ItemDetailSheet } from "./ItemDetailSheet"
 import { Money } from "@/components/common/Money"
 import { Percent } from "@/components/common/Percent"
 import { EmptyState } from "@/components/common/EmptyState"
-import { useToggleWatch, useToggleArchive } from "@/hooks/useResearchItems"
+import { useToggleWatch, useToggleArchive, useScanItems, useReevaluateItems } from "@/hooks/useResearchItems"
 import { computeRoi, truncateTitle } from "@/lib/format"
 import type { ResearchItem } from "@/lib/types"
 
@@ -42,9 +43,29 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
   const [search, setSearch] = useState("")
   const [showArchived, setShowArchived] = useState(false)
   const [endingSoon, setEndingSoon] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedTag, setSelectedTag] = useState("all")
 
   const toggleWatch = useToggleWatch()
   const toggleArchive = useToggleArchive()
+  const scanItems = useScanItems()
+  const reevaluateItems = useReevaluateItems()
+
+  const categories = useMemo(() => {
+    const cats = new Set<string>()
+    items.forEach(i => {
+      if (i.category) cats.add(i.category)
+    })
+    return Array.from(cats).sort()
+  }, [items])
+
+  const tags = useMemo(() => {
+    const allTags = new Set<string>()
+    items.forEach(i => {
+      if (i.tags) i.tags.forEach(t => allTags.add(t))
+    })
+    return Array.from(allTags).sort()
+  }, [items])
 
   const filtered = useMemo(() => {
     let data = items
@@ -52,6 +73,12 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
     if (endingSoon) {
       const cutoff = Date.now() + 24 * 3600 * 1000
       data = data.filter((i) => i.end_time && new Date(i.end_time).getTime() < cutoff)
+    }
+    if (selectedCategory !== "all") {
+      data = data.filter((i) => i.category === selectedCategory)
+    }
+    if (selectedTag !== "all") {
+      data = data.filter((i) => i.tags?.includes(selectedTag))
     }
     if (search) {
       const q = search.toLowerCase()
@@ -64,7 +91,21 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
       )
     }
     return data
-  }, [items, showArchived, endingSoon, search])
+  }, [items, showArchived, endingSoon, search, selectedCategory, selectedTag])
+
+  const handleScan = () => {
+    scanItems.mutate(undefined, {
+      onSuccess: () => toast.success("Scan started", { description: "Background scraping is now running." }),
+      onError: (err) => toast.error("Failed to start scan", { description: err.message })
+    })
+  }
+
+  const handleReevaluate = () => {
+    reevaluateItems.mutate(undefined, {
+      onSuccess: () => toast.success("Reevaluation started", { description: "Bulk valuation process has been queued." }),
+      onError: (err) => toast.error("Failed to reevaluate", { description: err.message })
+    })
+  }
 
   const openItem = (item: ResearchItem, tab?: string) => {
     setParams((p) => {
@@ -192,6 +233,16 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
         onShowArchivedChange={setShowArchived}
         endingSoon={endingSoon}
         onEndingSoonChange={setEndingSoon}
+        categories={categories}
+        tags={tags}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        selectedTag={selectedTag}
+        onTagChange={setSelectedTag}
+        onScan={handleScan}
+        onReevaluate={handleReevaluate}
+        isScanning={scanItems.isPending}
+        isReevaluating={reevaluateItems.isPending}
       />
 
       <div className="rounded-md border">

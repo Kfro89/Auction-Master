@@ -9,6 +9,22 @@ export function useResearchItems(showArchived = false) {
   })
 }
 
+export function useScanItems() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ status: string }>("/api/admin/scrape/all", { method: "POST" }),
+  })
+}
+
+export function useReevaluateItems() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ status: string }>("/api/admin/valuate-bulk", { 
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "all", target_roi: 0.30 })
+    }),
+  })
+}
+
 export function useToggleWatch() {
   const qc = useQueryClient()
   return useMutation({

@@ -1,6 +1,9 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RefreshCcw, ScanSearch } from "lucide-react"
 
 interface ResearchFiltersProps {
   search: string
@@ -9,28 +12,81 @@ interface ResearchFiltersProps {
   onShowArchivedChange: (v: boolean) => void
   endingSoon: boolean
   onEndingSoonChange: (v: boolean) => void
+  categories: string[]
+  tags: string[]
+  selectedCategory: string
+  onCategoryChange: (v: string) => void
+  selectedTag: string
+  onTagChange: (v: string) => void
+  onScan: () => void
+  onReevaluate: () => void
+  isScanning: boolean
+  isReevaluating: boolean
 }
 
 export function ResearchFilters({
   search, onSearchChange,
   showArchived, onShowArchivedChange,
   endingSoon, onEndingSoonChange,
+  categories, tags,
+  selectedCategory, onCategoryChange,
+  selectedTag, onTagChange,
+  onScan, onReevaluate,
+  isScanning, isReevaluating,
 }: ResearchFiltersProps) {
   return (
-    <div className="flex flex-wrap items-center gap-4 pb-4">
-      <Input
-        placeholder="Search items…"
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-        className="h-8 w-64"
-      />
-      <div className="flex items-center gap-2">
-        <Switch id="ending-soon" checked={endingSoon} onCheckedChange={onEndingSoonChange} />
-        <Label htmlFor="ending-soon" className="text-sm cursor-pointer">Ending in 24h</Label>
+    <div className="flex flex-wrap items-center gap-4 pb-4 justify-between">
+      <div className="flex flex-wrap items-center gap-4">
+        <Input
+          placeholder="Search items…"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="h-8 w-64"
+        />
+
+        <Select value={selectedCategory} onValueChange={onCategoryChange}>
+          <SelectTrigger className="w-[180px] h-8">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedTag} onValueChange={onTagChange}>
+          <SelectTrigger className="w-[180px] h-8">
+            <SelectValue placeholder="All Tags" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tags</SelectItem>
+            {tags.map((t) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-2 ml-2">
+          <Switch id="ending-soon" checked={endingSoon} onCheckedChange={onEndingSoonChange} />
+          <Label htmlFor="ending-soon" className="text-sm cursor-pointer">Ending in 24h</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id="show-archived" checked={showArchived} onCheckedChange={onShowArchivedChange} />
+          <Label htmlFor="show-archived" className="text-sm cursor-pointer">Show archived</Label>
+        </div>
       </div>
+      
       <div className="flex items-center gap-2">
-        <Switch id="show-archived" checked={showArchived} onCheckedChange={onShowArchivedChange} />
-        <Label htmlFor="show-archived" className="text-sm cursor-pointer">Show archived</Label>
+        <Button variant="outline" size="sm" onClick={onScan} disabled={isScanning}>
+          <ScanSearch className="mr-2 h-4 w-4" />
+          {isScanning ? "Scanning..." : "Scan for New"}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onReevaluate} disabled={isReevaluating}>
+          <RefreshCcw className="mr-2 h-4 w-4" />
+          {isReevaluating ? "Reevaluating..." : "Reevaluate"}
+        </Button>
       </div>
     </div>
   )
