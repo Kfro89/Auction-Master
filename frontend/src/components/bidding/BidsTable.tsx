@@ -26,7 +26,7 @@ import { Percent } from "@/components/common/Percent"
 import { EmptyState } from "@/components/common/EmptyState"
 import { CountdownBadge } from "@/components/research/CountdownBadge"
 import { useHideBid, useClaimBid } from "@/hooks/useBids"
-import { computeProjectedProfit, computeRoi } from "@/lib/format"
+import { computeProjectedProfit, computeRoi, truncateTitle } from "@/lib/format"
 import type { BidItem } from "@/lib/types"
 
 export function BidsTableSkeleton() {
@@ -69,9 +69,9 @@ export function BidsTable({ items }: { items: BidItem[] }) {
               <p className="text-sm font-medium leading-tight line-clamp-2">
                 {i.url ? (
                   <a href={i.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
-                    {i.title}
+                    {truncateTitle(i.title)}
                   </a>
-                ) : i.title}
+                ) : truncateTitle(i.title)}
               </p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {i.auction_house_name && <Badge variant="secondary" className="text-xs px-1.5 py-0">{i.auction_house_name}</Badge>}

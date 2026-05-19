@@ -7,7 +7,7 @@ import { Star } from "lucide-react"
 import { CountdownBadge } from "@/components/research/CountdownBadge"
 import { Money } from "@/components/common/Money"
 import { Percent } from "@/components/common/Percent"
-import { computeRoi } from "@/lib/format"
+import { computeRoi, truncateTitle } from "@/lib/format"
 
 export function WatchlistPage() {
   const { data, isLoading, isError } = useWatchlist()
@@ -42,8 +42,8 @@ export function WatchlistPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium leading-tight line-clamp-1">
                 {item.url
-                  ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary">{item.title}</a>
-                  : item.title
+                  ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary">{truncateTitle(item.title)}</a>
+                  : truncateTitle(item.title)
                 }
               </p>
               <div className="flex items-center gap-2 mt-0.5">

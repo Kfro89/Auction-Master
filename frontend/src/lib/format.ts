@@ -34,6 +34,10 @@ export function formatPercent(value: number | null | undefined): string {
   return `${(value * 100).toFixed(0)}%`
 }
 
+export function truncateTitle(title: string, max = 65): string {
+  return title.length > max ? title.slice(0, max).trimEnd() + "…" : title
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—"
   return new Intl.DateTimeFormat("en-US", {

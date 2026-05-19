@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { FileEdit, Package, ExternalLink } from "lucide-react"
 import { apiFetch } from "@/lib/api"
-import { formatMoney } from "@/lib/format"
+import { formatMoney, truncateTitle } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -99,7 +99,7 @@ export function WorkQueuePage() {
                       }
                     </TableCell>
                     <TableCell>
-                      <p className="text-sm font-medium line-clamp-1">{item.title}</p>
+                      <p className="text-sm font-medium">{truncateTitle(item.title)}</p>
                       <p className="text-xs text-muted-foreground">{item.sku ?? "—"}{item.condition ? ` · ${item.condition}` : ""}</p>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{item.storage_location ?? "—"}</TableCell>

@@ -22,7 +22,7 @@ import { Money } from "@/components/common/Money"
 import { Percent } from "@/components/common/Percent"
 import { EmptyState } from "@/components/common/EmptyState"
 import { useToggleWatch, useToggleArchive } from "@/hooks/useResearchItems"
-import { computeRoi } from "@/lib/format"
+import { computeRoi, truncateTitle } from "@/lib/format"
 import type { ResearchItem } from "@/lib/types"
 
 export function ResearchTableSkeleton() {
@@ -100,7 +100,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
           return (
             <div className="min-w-0">
               <p className="text-sm font-medium leading-tight line-clamp-2 cursor-pointer hover:text-primary" onClick={() => openItem(i)}>
-                {i.title}
+                {truncateTitle(i.title)}
               </p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {i.auction_house_name && <Badge variant="secondary" className="text-xs px-1.5 py-0">{i.auction_house_name}</Badge>}
