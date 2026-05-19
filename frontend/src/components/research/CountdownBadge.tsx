@@ -1,3 +1,4 @@
+import { motion } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
 import { useCountdown } from "@/hooks/useCountdown"
 
@@ -22,12 +23,25 @@ export function CountdownBadge({ endTime }: { endTime: string | null | undefined
     s < 3600 ? "outline" :
     "secondary"
 
-  // className tweak for warning state
   const extraClass = s < 3600 && s >= 60 ? "border-orange-400 text-orange-600 dark:text-orange-400" : ""
 
-  return (
+  const badge = (
     <Badge variant={variant} className={extraClass}>
       {formatSeconds(s)}
     </Badge>
   )
+
+  if (s < 10) {
+    return (
+      <motion.div
+        animate={{ scale: [1, 1.08, 1] }}
+        transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+        className="inline-flex"
+      >
+        {badge}
+      </motion.div>
+    )
+  }
+
+  return badge
 }

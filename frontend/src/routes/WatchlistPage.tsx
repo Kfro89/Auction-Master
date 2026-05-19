@@ -1,3 +1,4 @@
+import { motion } from "framer-motion"
 import { useWatchlist, useUnwatch } from "@/hooks/useWatchlist"
 import { EmptyState } from "@/components/common/EmptyState"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -31,10 +32,16 @@ export function WatchlistPage() {
 
   return (
     <div className="p-6 space-y-2">
-      {data.map((item) => {
+      {data.map((item, i) => {
         const roi = computeRoi(item.valuation?.est_market_value, item.current_bid)
         return (
-          <div key={item.id} className="flex items-center gap-3 rounded-lg border px-3 py-2 hover:bg-muted/50 transition-colors">
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.02, duration: 0.12 }}
+            className="flex items-center gap-3 rounded-lg border px-3 py-2 hover:bg-muted/50 transition-colors"
+          >
             {item.image_url
               ? <img src={item.image_url} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" />
               : <div className="h-10 w-10 rounded bg-muted flex-shrink-0" />
@@ -62,7 +69,7 @@ export function WatchlistPage() {
             >
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
             </Button>
-          </div>
+          </motion.div>
         )
       })}
     </div>

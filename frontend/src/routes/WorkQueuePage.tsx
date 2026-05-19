@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { FileEdit, Package, ExternalLink } from "lucide-react"
 import { apiFetch } from "@/lib/api"
@@ -88,10 +89,16 @@ export function WorkQueuePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item) => {
+              {filtered.map((item, i) => {
                 const cogs = item.cost_line_items.reduce((s, c) => s + c.amount, 0)
                 return (
-                  <TableRow key={item.id}>
+                  <motion.tr
+                    key={item.id}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.02, duration: 0.12 }}
+                    className="border-b transition-colors hover:bg-muted/50"
+                  >
                     <TableCell>
                       {item.image_url
                         ? <img src={item.image_url} alt="" className="h-9 w-9 rounded object-cover" />
@@ -137,7 +144,7 @@ export function WorkQueuePage() {
                         )}
                       </div>
                     </TableCell>
-                  </TableRow>
+                  </motion.tr>
                 )
               })}
             </TableBody>
