@@ -18,10 +18,10 @@ function notify() {
   listeners.forEach((cb) => cb(snapshot))
 }
 
-export function subscribeCommands(cb: Listener) {
+export function subscribeCommands(cb: Listener): () => void {
   listeners.add(cb)
   cb([...commands])
-  return () => listeners.delete(cb)
+  return () => { listeners.delete(cb) }
 }
 
 export function usePageCommands(items: CommandItem[]) {
