@@ -1,106 +1,46 @@
-import { Search, Command, Bell, Plus } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { cn } from '../../utils/cn';
+import { useMatches, useNavigate } from "react-router-dom"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "./ThemeToggle"
+import { clearToken } from "@/lib/auth"
+import { LogOut, Command } from "lucide-react"
 
-interface TopBarProps {
-  title?: string;
-  subtitle?: string;
-  onCmdK?: () => void;
-  rightSlot?: React.ReactNode;
-  endingSoonCount?: number;
-}
+export function TopBar() {
+  const matches = useMatches()
+  const navigate = useNavigate()
+  const title = matches
+    .filter((m) => Boolean((m.handle as { title?: string })?.title))
+    .map((m) => (m.handle as { title: string }).title)
+    .at(-1) ?? "Auction Master"
 
-export function TopBar({ title, subtitle, onCmdK, rightSlot, endingSoonCount = 0 }: TopBarProps) {
+  const signOut = () => {
+    clearToken()
+    navigate("/login")
+  }
+
   return (
-    <header
-      className="sticky top-0 z-30 flex items-center justify-between gap-4 px-6 hairline-b"
-      style={{
-        height: 'var(--topbar-h)',
-        background: 'var(--color-glass-1-bg)',
-        backdropFilter: 'blur(var(--blur-shell)) saturate(var(--saturate-glass))',
-        WebkitBackdropFilter: 'blur(var(--blur-shell)) saturate(var(--saturate-glass))',
-      }}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        {title && (
-          <motion.div
-            key={title}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="min-w-0"
-          >
-            <h1 className="text-headline-md truncate" style={{ color: 'var(--color-fg)' }}>
-              {title}
-            </h1>
-            {subtitle && (
-              <div className="text-xs truncate" style={{ color: 'var(--color-fg-muted)' }}>
-                {subtitle}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        {endingSoonCount > 0 && (
-          <span
-            className="status-pill"
-            style={{
-              background: 'var(--color-pending-soft)',
-              color: 'var(--color-pending)',
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ background: 'var(--color-pending)' }}
-            />
-            {endingSoonCount} ending soon
-          </span>
-        )}
-
-        {rightSlot}
-
-        <button
-          onClick={onCmdK}
-          className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all focus-ring',
-            'hover:bg-[var(--color-surface-2)]'
-          )}
-          style={{
-            background: 'var(--color-surface-1)',
-            color: 'var(--color-fg-muted)',
-            border: '1px solid var(--color-border-hairline)',
-          }}
-        >
-          <Search size={13} />
-          <span>Search</span>
-          <kbd
-            className="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold"
-            style={{
-              background: 'var(--color-surface-2)',
-              color: 'var(--color-fg-subtle)',
-            }}
-          >
-            <Command size={9} /> K
-          </kbd>
-        </button>
-
-        <button
-          className="p-2 rounded-md transition-colors focus-ring hover:bg-[var(--color-surface-2)]"
-          style={{ color: 'var(--color-fg-muted)' }}
-          aria-label="Notifications"
-        >
-          <Bell size={16} />
-        </button>
-
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all focus-ring btn-primary"
-        >
-          <Plus size={13} strokeWidth={2.5} />
-          <span>New</span>
-        </button>
-      </div>
+    <header className="flex h-12 items-center gap-2 border-b px-4 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="h-4" />
+      <span className="font-medium text-sm flex-1">{title}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 gap-1.5 text-xs text-muted-foreground"
+        onClick={() => {
+          const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true })
+          window.dispatchEvent(e)
+        }}
+      >
+        <Command className="h-3 w-3" />
+        <span className="hidden sm:inline">K</span>
+      </Button>
+      <ThemeToggle />
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={signOut}>
+        <LogOut className="h-4 w-4" />
+        <span className="sr-only">Sign out</span>
+      </Button>
     </header>
-  );
+  )
 }
