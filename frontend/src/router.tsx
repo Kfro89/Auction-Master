@@ -2,7 +2,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom"
 import { AppLayout } from "@/components/shell/AppLayout"
 import { ProtectedRoute } from "@/components/shell/ProtectedRoute"
 import { LoginPage } from "@/routes/LoginPage"
-import { PlaceholderPage } from "@/routes/PlaceholderPage"
 
 export const router = createBrowserRouter([
   {
@@ -34,37 +33,37 @@ export const router = createBrowserRouter([
           {
             path: "workqueue",
             handle: { title: "Work Queue" },
-            element: <PlaceholderPage />,
+            lazy: () => import("@/routes/WorkQueuePage").then((m) => ({ Component: m.WorkQueuePage })),
           },
           {
             path: "fulfillment",
             handle: { title: "Fulfillment" },
-            element: <PlaceholderPage />,
-          },
-          {
-            path: "store",
-            handle: { title: "Store" },
-            element: <PlaceholderPage />,
+            lazy: () => import("@/routes/FulfillmentPage").then((m) => ({ Component: m.FulfillmentPage })),
           },
           {
             path: "ledger",
             handle: { title: "Ledger" },
-            element: <PlaceholderPage />,
-          },
-          {
-            path: "vehicles",
-            handle: { title: "Vehicles" },
-            element: <PlaceholderPage />,
-          },
-          {
-            path: "rma",
-            handle: { title: "RMA" },
-            element: <PlaceholderPage />,
+            lazy: () => import("@/routes/LedgerPage").then((m) => ({ Component: m.LedgerPage })),
           },
           {
             path: "settings",
             handle: { title: "Settings" },
-            element: <PlaceholderPage />,
+            lazy: () => import("@/routes/SettingsPage").then((m) => ({ Component: m.SettingsPage })),
+          },
+          {
+            path: "store",
+            handle: { title: "Store" },
+            lazy: () => import("@/routes/PlaceholderPage").then((m) => ({ Component: m.PlaceholderPage })),
+          },
+          {
+            path: "vehicles",
+            handle: { title: "Vehicles" },
+            lazy: () => import("@/routes/PlaceholderPage").then((m) => ({ Component: m.PlaceholderPage })),
+          },
+          {
+            path: "rma",
+            handle: { title: "RMA" },
+            lazy: () => import("@/routes/PlaceholderPage").then((m) => ({ Component: m.PlaceholderPage })),
           },
         ],
       },
