@@ -1,5 +1,0 @@
-.saas-container { padding: 40px; max-width: 1200px; margin: auto; }
-.saas-header { font-family: 'Inter', sans-serif; font-weight: 600; color: #111827; }
-.saas-card-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-.saas-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-.saas-btn { background-color: #4f46e5; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import './ResearchView.css';
-import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
+
+import { ViewContainer, FilterBar } from '../components/layout/ViewLayout';
+import { Button, KpiTile } from '../components/ui';
 import { useSortableData } from '../hooks/useSortableData';
 import Modal from '../components/Modal';
 import ItemDetailModal from '../components/ItemDetailModal';
@@ -9,9 +10,9 @@ import { CalendarDays, Clock, TrendingUp, ArrowUpDown, ExternalLink, ImageIcon, 
 import { useCommandContext } from '../contexts/CommandContext';
 import type { Command } from '../contexts/CommandContext';
 import { CountdownTimer } from '../components/CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
+import { normalizeTags, getHighResImageUrl, formatAuctionDate, formatItemName } from '../utils/formatters';
 
-interface Item {
+interface ResearchItem {
   id: number;
   title: string;
   lot_number: string;
@@ -22,7 +23,10 @@ interface Item {
   image_url: string;
   auction_house_key: string;
   category?: string;
-  tags?: any; // Can be string[] or Record<string, string | string[]>
+  tags?: unknown; // Can be string[] or Record<string, string | string[]>
+  product_name?: string;
+  brand?: string;
+  condition?: string;
   vin?: string;
   vehicle_year?: number | string;
   vehicle_make?: string;
@@ -66,12 +70,13 @@ const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className
   'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
   'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
   'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
+  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
 const VehiclesView: React.FC = () => {
   const { setContextCommands } = useCommandContext();
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<ResearchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isScraping, setIsScraping] = useState<boolean>(false);
   const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
@@ -90,16 +95,16 @@ const VehiclesView: React.FC = () => {
   }, [newItemIds]);
 
   const clearNewStatus = (itemId: number) => {
-    setNewItemIds(prev => {
+    setTimeout(() => setNewItemIds(prev => {
       if (!prev.has(itemId)) return prev;
       const next = new Set(prev);
       next.delete(itemId);
       return next;
-    });
+    }), 0);
   };
 
   React.useEffect(() => {
-    setNewItemIds(prev => {
+    setTimeout(() => setNewItemIds(prev => {
       let changed = false;
       const next = new Set(prev);
       items.forEach(item => {
@@ -109,7 +114,7 @@ const VehiclesView: React.FC = () => {
         }
       });
       return changed ? next : prev;
-    });
+    }), 0);
   }, [items]);
 
   // Column Configuration State
@@ -163,7 +168,7 @@ const VehiclesView: React.FC = () => {
       startWidth: columnConfig[colId].width
     };
     document.addEventListener('mousemove', onResizeMove);
-    document.addEventListener('mouseup', onResizeEnd);
+    document.addEventListener('mouseup', () => onResizeEnd());
   };
 
   const onResizeMove = React.useCallback((e: MouseEvent) => {
@@ -231,7 +236,7 @@ const VehiclesView: React.FC = () => {
   );
 
   // Modal State
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ResearchItem | null>(null);
   const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
 
   const fetchSettings = async () => {
@@ -258,7 +263,7 @@ const VehiclesView: React.FC = () => {
 
   const fetchItems = async () => {
     try {
-      const response = await fetch('/api/items/');
+      const response = await fetch('/api/research/');
       if (response.ok) {
         const data = await response.json();
         setItems(data);
@@ -274,8 +279,10 @@ const VehiclesView: React.FC = () => {
   const isValuatingRef = React.useRef(false);
 
   useEffect(() => {
-    fetchItems();
-    fetchSettings();
+    setTimeout(() => {
+      fetchItems();
+      fetchSettings();
+    }, 0);
     
     const fetchJobStatus = async () => {
       try {
@@ -287,7 +294,7 @@ const VehiclesView: React.FC = () => {
           if (!currentlyScraping && isScrapingRef.current) {
             // Scrape just finished, let's fetch items and find new ones
             try {
-               const res = await fetch('/api/items/');
+               const res = await fetch('/api/research/');
                if (res.ok) {
                  const newData = await res.json();
                  setItems(prevItems => {
@@ -364,7 +371,7 @@ const VehiclesView: React.FC = () => {
     }, 2000);
 
     try {
-      const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
+      const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}&type=research`, { method: 'POST' });
       if (response.ok) {
         const newValuation = await response.json();
         setItems(prev => prev.map(item => 
@@ -422,7 +429,7 @@ const VehiclesView: React.FC = () => {
 
   const toggleWatchStatus = async (itemId: number, currentStatus: boolean) => {
     try {
-      const response = await fetch(`/api/items/${itemId}/watch`, {
+      const response = await fetch(`/api/research/${itemId}/watch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_watched: !currentStatus })
@@ -488,8 +495,10 @@ const VehiclesView: React.FC = () => {
       let passesSearch = true;
       if (searchQuery) {
         const lowerQuery = searchQuery.toLowerCase();
+        const itemName = formatItemName(item).toLowerCase();
         const ahName = AUCTION_HOUSE_MAP[item.auction_house_key]?.name.toLowerCase() || '';
-        passesSearch = item.title.toLowerCase().includes(lowerQuery) || 
+        passesSearch = itemName.includes(lowerQuery) || 
+                       item.title.toLowerCase().includes(lowerQuery) || 
                        item.lot_number.toLowerCase().includes(lowerQuery) ||
                        ahName.includes(lowerQuery) ||
                        normalizeTags(item.tags).some(tag => 
@@ -627,61 +636,61 @@ const VehiclesView: React.FC = () => {
 
   return (
     <ViewContainer className="research-view">
-      <ViewHeader 
-        title="Vehicle Research" 
-        subtitle="Real-time arbitrage opportunities from top auction houses."
-        actions={
-          <>
-            <Tooltip text="Refresh data from all auction houses">
-              <button 
-                className={`action-btn scrape-btn ${isScraping ? 'scraping' : ''}`}
-                onClick={handleScrape}
-                disabled={isScraping}
-              >
-                {isScraping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
-                {isScraping ? 'Scanning...' : 'Check for New Items'}
-              </button>
-            </Tooltip>
-            <Tooltip text="Update valuations for all items">
-              <button 
-                className="action-btn"
-                onClick={() => setIsBulkValuateModalOpen(true)}
-                disabled={bulkValuateProgress.active}
-              >
-                {bulkValuateProgress.active ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <TrendingUp size={16}/>}
-                {bulkValuateProgress.active ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})` : 'Update Valuations'}
-              </button>
-            </Tooltip>
-          </>
-        }
-      />
+      <header className="flex flex-wrap justify-between items-start gap-3 mb-1">
+        <div>
+          <h1 className="text-headline-lg" style={{ color: 'var(--color-fg)' }}>Vehicle Research</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-fg-muted)' }}>
+            Real-time arbitrage opportunities from top auction houses.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button
+            variant="secondary"
+            onClick={handleScrape}
+            disabled={isScraping}
+            leftIcon={isScraping ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />}
+          >
+            {isScraping ? 'Scanning…' : 'Check for new items'}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setIsBulkValuateModalOpen(true)}
+            disabled={bulkValuateProgress.active}
+            leftIcon={bulkValuateProgress.active ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14} />}
+          >
+            {bulkValuateProgress.active
+              ? `Updating (${bulkValuateProgress.current}/${bulkValuateProgress.total})`
+              : 'Update valuations'}
+          </Button>
+        </div>
+      </header>
 
-      <KpiBar>
-        <KpiCard 
-          icon={<Clock size={24} />} 
-          label="Ending Today" 
-          value={kpis.today} 
-          secondaryValue="Items"
-          active={filter === 'today'}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiTile
+          icon={<Clock size={14} />}
+          label="Ending Today"
+          value={kpis.today}
+          tone={filter === 'today' ? 'accent' : 'pending'}
           onClick={() => setFilter(filter === 'today' ? 'all' : 'today')}
+          index={0}
         />
-        <KpiCard 
-          icon={<CalendarDays size={24} />} 
-          label="Ending Tomorrow" 
-          value={kpis.tomorrow} 
-          secondaryValue="Items"
-          active={filter === 'tomorrow'}
+        <KpiTile
+          icon={<CalendarDays size={14} />}
+          label="Ending Tomorrow"
+          value={kpis.tomorrow}
+          tone={filter === 'tomorrow' ? 'accent' : 'neutral'}
           onClick={() => setFilter(filter === 'tomorrow' ? 'all' : 'tomorrow')}
+          index={1}
         />
-        <KpiCard 
-          icon={<CalendarDays size={24} />} 
-          label="Ending This Week" 
-          value={kpis.week} 
-          secondaryValue="Items"
-          active={filter === 'week'}
+        <KpiTile
+          icon={<CalendarDays size={14} />}
+          label="Ending This Week"
+          value={kpis.week}
+          tone={filter === 'week' ? 'accent' : 'neutral'}
           onClick={() => setFilter(filter === 'week' ? 'all' : 'week')}
+          index={2}
         />
-      </KpiBar>
+      </div>
 
       <section className="grid-section">
         <FilterBar title="Available Vehicles">
@@ -708,7 +717,7 @@ const VehiclesView: React.FC = () => {
             <span className="roi-percent">%</span>
           </div>
           <select 
-            className="saas-input"
+            className="form-input"
             value={auctionHouseFilter}
             onChange={(e) => setAuctionHouseFilter(e.target.value)}
           >
@@ -719,13 +728,13 @@ const VehiclesView: React.FC = () => {
           </select>
           <input 
             type="text" 
-            className="saas-input search-input"
+            className="form-input search-input"
             placeholder="Search title, lot, or tags..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <select 
-            className="saas-input"
+            className="form-input"
             value={parentCategoryFilter}
             onChange={(e) => {
               setParentCategoryFilter(e.target.value);
@@ -738,7 +747,7 @@ const VehiclesView: React.FC = () => {
             ))}
           </select>
           <select 
-            className="saas-input"
+            className="form-input"
             value={subCategoryFilter}
             onChange={(e) => setSubCategoryFilter(e.target.value)}
             disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
@@ -793,7 +802,7 @@ const VehiclesView: React.FC = () => {
                         <img 
                           src={item.image_url || '/placeholder.png'} 
                           className="table-img clickable-img" 
-                          alt="" 
+                          alt={formatItemName(item)} 
                           onClick={() => {
                             setSelectedItem(item);
                             clearNewStatus(item.id);
@@ -808,8 +817,8 @@ const VehiclesView: React.FC = () => {
                     </td>
                     <td className="clickable-title" style={getColStyle('title')}>
                       <div className="title-content">
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {item.title} <ExternalLink size={12} className="inline-icon"/>
+                        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }} title={formatItemName(item)}>
+                          {formatItemName(item)} <ExternalLink size={12} className="inline-icon"/>
                         </a>
                       </div>
                     </td>
@@ -923,14 +932,14 @@ const VehiclesView: React.FC = () => {
                 <div key={item.id} className="research-card">
                   <div className="research-card-image-container">
                     <div className="research-card-title-overlay">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={item.title}>
-                        {item.title}
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={formatItemName(item)}>
+                        {formatItemName(item)}
                       </a>
                     </div>
                     <img 
                       src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
                       className="research-card-image" 
-                      alt={item.title} 
+                      alt={formatItemName(item)} 
                       onClick={() => {
                         setSelectedItem(item);
                         clearNewStatus(item.id);
@@ -1052,14 +1061,14 @@ const VehiclesView: React.FC = () => {
                 <div key={item.id} className="research-card">
                   <div className="research-card-image-container">
                     <div className="research-card-title-overlay">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={item.title}>
-                        {item.title}
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={formatItemName(item)}>
+                        {formatItemName(item)}
                       </a>
                     </div>
                     <img 
                       src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
                       className="research-card-image" 
-                      alt={item.title} 
+                      alt={formatItemName(item)} 
                       onClick={() => {
                         setSelectedItem(item);
                         clearNewStatus(item.id);

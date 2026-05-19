@@ -1,5 +1,6 @@
 import React from 'react';
 import { Eye, Heart, AlertCircle, TrendingUp, MoreVertical } from 'lucide-react';
+import { formatItemName } from '../utils/formatters';
 
 interface ActiveListing {
   id: number;
@@ -11,6 +12,9 @@ interface ActiveListing {
   impressions: number;
   clicks: number;
   duration_days: number;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
 }
 
 interface ActiveListingsPaneProps {
@@ -55,7 +59,7 @@ const ActiveListingsPane: React.FC<ActiveListingsPaneProps> = ({ listings }) => 
                         rel="noopener noreferrer"
                         className="text-white font-medium hover:text-blue-400 transition-colors line-clamp-1 text-sm"
                       >
-                        {item.title}
+                        {formatItemName(item)}
                       </a>
                       <span className="text-[10px] text-gray-500 mono uppercase tracking-tight">ID: {item.ebay_item_id}</span>
                     </div>

@@ -1,33 +1,23 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import './ResearchView.css';
-import './WatchListView.css';
-import { ViewContainer, ViewHeader, KpiBar, KpiCard, FilterBar } from '../components/layout/ViewLayout';
-import { useSortableData } from '../hooks/useSortableData';
-import ItemDetailModal from '../components/ItemDetailModal';
-import Tooltip from '../components/Tooltip';
-import { 
-  Eye, 
-  Gavel, 
-  DollarSign, 
-  TrendingUp, 
-  LayoutGrid, 
-  List, 
-  Target, 
-  ExternalLink, 
-  ImageIcon, 
-  ArrowUpDown, 
-  Loader2, 
-  X,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Save
-  } from 'lucide-react';import { CountdownTimer } from '../components/CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate, formatItemName } from '../utils/formatters';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Star, ExternalLink, Archive, Gavel, DollarSign, TrendingUp, Clock,
+  Loader2, RefreshCcw,
+} from 'lucide-react';
+import {
+  Button, KpiTile, DataTable, FilterBar, StatusBadge, ItemThumbnail, Money, Percent,
+  SlideOver, GlassSurface, EmptyState, ChartThemeProvider,
+} from '../components/ui';
+import type { Column, Density, FilterChip } from '../components/ui';
+import { CountdownTimer } from '../components/CountdownTimer';
+import { useToast } from '../components/shell/ToastProvider';
+import { getHighResImageUrl, formatItemName, normalizeTags } from '../utils/formatters';
 
 interface ResearchItem {
   id: number;
   title: string;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
   lot_number: string;
   current_bid: number;
   end_time: string | null;
@@ -36,819 +26,574 @@ interface ResearchItem {
   auction_house_key: string;
   category?: string;
   tags?: any;
-  product_name?: string;
-  brand?: string;
-  condition?: string;
   valuation?: {
     est_market_value: number;
     max_bid_for_target_roi: number;
     target_roi_pct: number;
-    computed_at: string;
-    search_query?: string;
+    computed_at?: string;
     sample_size?: number;
   };
   is_watched?: boolean;
 }
 
-export interface ColumnConfig {
-  width: number;
-  align: 'left' | 'center' | 'right';
+const AUCTION_HOUSES: Record<string, string> = {
+  rol: 'Roller',
+  rmeb: 'Whitley',
+  public_surplus: 'Public Surplus',
+  govdeals: 'GovDeals',
+  dickensheet: 'Dickensheet',
+};
+
+function endsWithin(item: ResearchItem, hours: number): boolean {
+  if (!item.end_time) return false;
+  const ms = new Date(item.end_time).getTime() - Date.now();
+  return ms > 0 && ms < hours * 3600 * 1000;
 }
 
-const DEFAULT_COLUMNS: Record<string, ColumnConfig> = {
-  image: { width: 50, align: 'center' },
-  title: { width: 345, align: 'left' },
-  lot: { width: 70, align: 'left' },
-  source: { width: 100, align: 'center' },
-  category: { width: 140, align: 'left' },
-  tags: { width: 140, align: 'left' },
-  bid: { width: 115, align: 'center' },
-  estMarket: { width: 115, align: 'center' },
-  maxBid: { width: 115, align: 'center' },
-  roi: { width: 115, align: 'center' },
-  time: { width: 140, align: 'center' },
-  actions: { width: 110, align: 'center' }
-};
+function calcRoi(item: ResearchItem): number | null {
+  if (!item.valuation?.est_market_value || !item.current_bid) return null;
+  const ebayFees = item.valuation.est_market_value * 0.1325 + 0.4;
+  const netRevenue = item.valuation.est_market_value - ebayFees;
+  return ((netRevenue - item.current_bid) / item.current_bid) * 100;
+}
 
-const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className: string }> = {
-  'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
-  'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
-  'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
-  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
-  'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
-};
-
-const WatchListView: React.FC = () => {
+export default function WatchListView() {
+  const { success, error: toastError, info } = useToast();
   const [items, setItems] = useState<ResearchItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [valuatingItems, setValuatingItems] = useState<Set<number>>(new Set());
-  const [valuationStatus, setValuationStatus] = useState<{ [itemId: number]: string }>({});
-  const [valuationErrors, setValuationErrors] = useState<{ [itemId: number]: string }>({});
-  const [targetRoi, setTargetRoi] = useState<number>(() => parseInt(localStorage.getItem('targetRoi') || '30', 10));
-  const [targetMargins, setTargetMargins] = useState<Record<number, string | number>>({});
-  const [comparables, setComparables] = useState<Record<number, any>>({});
-  const [loadingComparables, setLoadingComparables] = useState<Record<number, boolean>>({});
-  const [timezone, setTimezone] = useState<string>(localStorage.getItem('user_timezone') || 'America/Denver');
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [houseFilter, setHouseFilter] = useState<string>('');
+  const [endingSoonOnly, setEndingSoonOnly] = useState(false);
+  const [density, setDensity] = useState<Density>('cozy');
+  const [selectedItem, setSelectedItem] = useState<ResearchItem | null>(null);
 
-  const fetchSettings = async () => {
+  const loadItems = async () => {
     try {
-      const response = await fetch('/api/admin/settings');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.user_timezone) {
-          setTimezone(data.user_timezone);
-          localStorage.setItem('user_timezone', data.user_timezone);
-        }
-      }
+      const res = await fetch('/api/research/watchlist');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const list: ResearchItem[] = Array.isArray(data) ? data : data.items ?? [];
+      // Force is_watched=true since this endpoint returns only watched items
+      setItems(list.map((i) => ({ ...i, is_watched: true })));
     } catch (e) {
-      console.error('Failed to fetch settings for timezone:', e);
+      console.error(e);
+      toastError('Failed to load watchlist');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    localStorage.setItem('targetRoi', targetRoi.toString());
-  }, [targetRoi]);
-
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>(() => 
-    (localStorage.getItem('watchlist_view_mode') as 'table' | 'grid') || 'grid'
-  );
-  
-  useEffect(() => {
-    localStorage.setItem('watchlist_view_mode', viewMode);
-  }, [viewMode]);
-
-  // Column Configuration State
-  const [columnConfig, setColumnConfig] = useState<Record<string, ColumnConfig>>(() => {
-    const saved = localStorage.getItem('watchlistTableConfig');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return { ...DEFAULT_COLUMNS, ...parsed };
-      } catch (e) { }
-    }
-    return DEFAULT_COLUMNS;
-  });
-  const [isEditMode, setIsEditMode] = useState(false);
-  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resizerRef = React.useRef<{ isResizing: boolean, colId: string | null, startX: number, startWidth: number }>({
-    isResizing: false,
-    colId: null,
-    startX: 0,
-    startWidth: 0
-  });
-
-  const handleHeaderMouseDown = () => {
-    if (isEditMode) return;
-    longPressTimer.current = setTimeout(() => {
-      setIsEditMode(true);
-    }, 600);
-  };
-
-  const handleHeaderMouseUpOrLeave = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const saveColumnConfig = () => {
-    localStorage.setItem('watchlistTableConfig', JSON.stringify(columnConfig));
-    setIsEditMode(false);
-  };
-
-  const onResizeStart = (e: React.MouseEvent, colId: string) => {
-    e.stopPropagation();
-    resizerRef.current = {
-      isResizing: true,
-      colId,
-      startX: e.clientX,
-      startWidth: columnConfig[colId].width
-    };
-    document.addEventListener('mousemove', onResizeMove);
-    document.addEventListener('mouseup', onResizeEnd);
-  };
-
-  const onResizeMove = React.useCallback((e: MouseEvent) => {
-    if (!resizerRef.current.isResizing || !resizerRef.current.colId) return;
-    const diff = e.clientX - resizerRef.current.startX;
-    const newWidth = Math.max(40, resizerRef.current.startWidth + diff);
-    setColumnConfig(prev => ({
-      ...prev,
-      [resizerRef.current.colId!]: { ...prev[resizerRef.current.colId!], width: newWidth }
-    }));
+    loadItems();
   }, []);
 
-  const onResizeEnd = React.useCallback(() => {
-    resizerRef.current.isResizing = false;
-    resizerRef.current.colId = null;
-    document.removeEventListener('mousemove', onResizeMove);
-    document.removeEventListener('mouseup', onResizeEnd);
-  }, [onResizeMove]);
-
-  const updateAlign = (e: React.MouseEvent, colId: string, align: 'left' | 'center' | 'right') => {
-    e.stopPropagation();
-    setColumnConfig(prev => ({
-      ...prev,
-      [colId]: { ...prev[colId], align }
-    }));
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadItems();
   };
 
-  const getColStyle = (colId: string): React.CSSProperties => {
-    const col = columnConfig[colId] || DEFAULT_COLUMNS[colId] || { width: 100, align: 'left' };
-    return {
-      width: `${col.width}px`,
-      minWidth: `${col.width}px`,
-      maxWidth: `${col.width}px`,
-      textAlign: col.align
-    };
+  const handleUnwatch = async (item: ResearchItem) => {
+    // Optimistically remove from this view (since it shows only watched)
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    try {
+      const res = await fetch(`/api/research/${item.id}/watch`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      success('Removed from watchlist');
+    } catch {
+      loadItems();
+      toastError('Could not update watch status');
+    }
   };
 
-  const renderHeaderCell = (colId: string, content: React.ReactNode, sortKey?: string, className: string = '') => (
-    <th 
-      onClick={() => sortKey && !isEditMode ? requestSort(sortKey) : undefined}
-      className={`${className} ${sortKey && !isEditMode ? 'sortable' : ''}`}
-      style={{ ...getColStyle(colId) }}
-    >
-      <div className={`header-content ${(columnConfig[colId] || DEFAULT_COLUMNS[colId] || { align: 'left' }).align}`}>
-        {content} {sortKey && renderSortIcon(sortKey)}
-        
-        {isEditMode && (
-          <div className="edit-mode-controls">
-             <div className="align-buttons" onClick={e => e.stopPropagation()}>
-                <button onClick={(e) => updateAlign(e, colId, 'left')}><AlignLeft size={12}/></button>
-                <button onClick={(e) => updateAlign(e, colId, 'center')}><AlignCenter size={12}/></button>
-                <button onClick={(e) => updateAlign(e, colId, 'right')}><AlignRight size={12}/></button>
-             </div>
-             <div className="resizer-handle" onMouseDown={(e) => onResizeStart(e, colId)} />
+  const handleArchive = async (item: ResearchItem) => {
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    try {
+      const res = await fetch(`/api/research/${item.id}/archive`, { method: 'PATCH' });
+      if (!res.ok) throw new Error('failed');
+      info('Archived');
+    } catch {
+      loadItems();
+      toastError('Archive failed');
+    }
+  };
+
+  // ─── Filtering & search
+  const filtered = useMemo(() => {
+    let result = items;
+    if (houseFilter) result = result.filter((i) => i.auction_house_key === houseFilter);
+    if (endingSoonOnly) result = result.filter((i) => endsWithin(i, 24));
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (i) =>
+          (i.title?.toLowerCase().includes(q)) ||
+          (i.product_name?.toLowerCase().includes(q)) ||
+          (i.lot_number?.toLowerCase().includes(q)) ||
+          (i.brand?.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [items, search, houseFilter, endingSoonOnly]);
+
+  // ─── KPIs
+  const kpis = useMemo(() => {
+    const count = items.length;
+    const totalEstValue = items.reduce(
+      (acc, i) => acc + (i.valuation?.est_market_value ?? 0),
+      0
+    );
+    const withRoi = items.map(calcRoi).filter((r): r is number => r !== null);
+    const avgRoi = withRoi.length ? withRoi.reduce((a, b) => a + b, 0) / withRoi.length : null;
+    const endingSoon = items.filter((i) => endsWithin(i, 24)).length;
+    return { count, totalEstValue, avgRoi, endingSoon };
+  }, [items]);
+
+  const filterChips: FilterChip[] = useMemo(() => {
+    const chips: FilterChip[] = [];
+    if (houseFilter) {
+      chips.push({
+        id: 'house',
+        label: 'Auction',
+        value: AUCTION_HOUSES[houseFilter] ?? houseFilter,
+        onClear: () => setHouseFilter(''),
+      });
+    }
+    if (endingSoonOnly) {
+      chips.push({ id: 'ending', label: 'Ending', value: '< 24h', onClear: () => setEndingSoonOnly(false) });
+    }
+    return chips;
+  }, [houseFilter, endingSoonOnly]);
+
+  // ─── Table columns
+  const columns: Column<ResearchItem>[] = [
+    {
+      id: 'thumb',
+      header: '',
+      width: 48,
+      cell: (item) => (
+        <ItemThumbnail src={getHighResImageUrl(item.image_url)} alt={formatItemName(item)} size={36} />
+      ),
+    },
+    {
+      id: 'item',
+      header: 'Item',
+      sortable: true,
+      sortAccessor: (i) => i.title ?? '',
+      cell: (item) => (
+        <div className="min-w-0 max-w-[420px]">
+          <div
+            className="text-sm font-medium truncate"
+            style={{ color: 'var(--color-fg)' }}
+            title={formatItemName(item)}
+          >
+            {formatItemName(item)}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            {item.brand && (
+              <span className="text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
+                {item.brand}
+              </span>
+            )}
+            <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-fg-subtle)' }}>
+              #{item.lot_number}
+            </span>
+            {item.condition && (
+              <StatusBadge tone="subtle" size="xs">
+                {item.condition}
+              </StatusBadge>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'house',
+      header: 'Auction',
+      width: 110,
+      cell: (item) => (
+        <StatusBadge tone="neutral" size="xs">
+          {AUCTION_HOUSES[item.auction_house_key] ?? item.auction_house_key}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: 'bid',
+      header: 'Current Bid',
+      align: 'right',
+      width: 110,
+      sortable: true,
+      sortAccessor: (i) => i.current_bid,
+      cell: (item) => <Money value={item.current_bid} size="sm" tone="neutral" />,
+    },
+    {
+      id: 'value',
+      header: 'Est. Value',
+      align: 'right',
+      width: 110,
+      sortable: true,
+      sortAccessor: (i) => i.valuation?.est_market_value ?? 0,
+      cell: (item) =>
+        item.valuation?.est_market_value ? (
+          <div className="flex flex-col items-end gap-0.5">
+            <Money value={item.valuation.est_market_value} size="sm" tone="neutral" />
+            {item.valuation.sample_size !== undefined && (
+              <span className="text-[10px]" style={{ color: 'var(--color-fg-subtle)' }}>
+                n={item.valuation.sample_size}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+        ),
+    },
+    {
+      id: 'maxbid',
+      header: 'Max Bid',
+      align: 'right',
+      width: 110,
+      sortable: true,
+      sortAccessor: (i) => i.valuation?.max_bid_for_target_roi ?? 0,
+      cell: (item) =>
+        item.valuation?.max_bid_for_target_roi ? (
+          <Money value={item.valuation.max_bid_for_target_roi} size="sm" tone="accent" />
+        ) : (
+          <span style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+        ),
+    },
+    {
+      id: 'roi',
+      header: 'ROI',
+      align: 'right',
+      width: 90,
+      sortable: true,
+      sortAccessor: (i) => calcRoi(i) ?? -9999,
+      cell: (item) => <Percent value={calcRoi(item)} />,
+    },
+    {
+      id: 'ends',
+      header: 'Ends',
+      align: 'right',
+      width: 110,
+      sortable: true,
+      sortAccessor: (i) => (i.end_time ? new Date(i.end_time).getTime() : Infinity),
+      cell: (item) => <CountdownTimer endTime={item.end_time} pill />,
+    },
+    {
+      id: 'actions',
+      header: '',
+      align: 'right',
+      width: 130,
+      cell: (item) => (
+        <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => handleUnwatch(item)}
+            className="p-1.5 rounded transition-colors hover:bg-[var(--color-surface-2)] focus-ring"
+            title="Remove from watchlist"
+            style={{ color: 'var(--color-pending)' }}
+          >
+            <Star size={14} fill="currentColor" strokeWidth={1.75} />
+          </button>
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="p-1.5 rounded transition-colors hover:bg-[var(--color-surface-2)] focus-ring"
+            title="Open auction page"
+            style={{ color: 'var(--color-fg-muted)' }}
+          >
+            <ExternalLink size={14} strokeWidth={1.75} />
+          </a>
+          <button
+            onClick={() => handleArchive(item)}
+            className="p-1.5 rounded transition-colors hover:bg-[var(--color-surface-2)] focus-ring"
+            title="Archive"
+            style={{ color: 'var(--color-fg-muted)' }}
+          >
+            <Archive size={14} strokeWidth={1.75} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <ChartThemeProvider>
+      <div className="flex flex-col gap-5">
+        {/* KPI strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiTile
+            label="Watched Items"
+            value={kpis.count.toLocaleString()}
+            icon={<Star size={14} />}
+            tone="accent"
+            index={0}
+          />
+          <KpiTile
+            label="Total Est. Value"
+            value={<Money value={kpis.totalEstValue} size="xl" compact tone="profit" />}
+            icon={<DollarSign size={14} />}
+            tone="profit"
+            index={1}
+          />
+          <KpiTile
+            label="Avg ROI"
+            value={kpis.avgRoi !== null ? `${kpis.avgRoi.toFixed(1)}%` : '—'}
+            icon={<TrendingUp size={14} />}
+            tone={(kpis.avgRoi ?? 0) >= 0 ? 'profit' : 'loss'}
+            index={2}
+          />
+          <KpiTile
+            label="Ending in < 24h"
+            value={kpis.endingSoon}
+            icon={<Clock size={14} />}
+            tone="pending"
+            index={3}
+          />
+        </div>
+
+        {/* Filter bar */}
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search title, brand, or lot #…"
+          chips={filterChips}
+          onClearAll={() => {
+            setHouseFilter('');
+            setEndingSoonOnly(false);
+          }}
+          density={density}
+          onDensityChange={setDensity}
+          resultCount={filtered.length}
+          totalCount={items.length}
+          rightSlot={
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCcw size={13} />}
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              Refresh
+            </Button>
+          }
+          filtersSlot={
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="text-label-caps">Auction</span>
+                <select
+                  value={houseFilter}
+                  onChange={(e) => setHouseFilter(e.target.value)}
+                  className="min-w-[160px]"
+                >
+                  <option value="">All</option>
+                  {Object.entries(AUCTION_HOUSES).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-label-caps">Ending</span>
+                <label
+                  className="flex items-center gap-2 px-3 h-9 rounded-md cursor-pointer"
+                  style={{ background: 'var(--color-surface-1)', border: '1px solid var(--color-border-hairline)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={endingSoonOnly}
+                    onChange={(e) => setEndingSoonOnly(e.target.checked)}
+                  />
+                  <span className="text-xs" style={{ color: 'var(--color-fg)' }}>
+                    Within 24h
+                  </span>
+                </label>
+              </div>
+            </>
+          }
+        />
+
+        {/* Table */}
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyField={(i) => i.id}
+          loading={loading}
+          density={density}
+          onRowClick={(item) => setSelectedItem(item)}
+          defaultSort={{ columnId: 'ends', direction: 'asc' }}
+          emptyState={
+            <EmptyState
+              icon={<Star size={20} />}
+              title={search || filterChips.length ? 'No matches' : 'No watched items'}
+              description={
+                search || filterChips.length
+                  ? `Try adjusting your filters.`
+                  : 'Star items from Research to track them here.'
+              }
+            />
+          }
+        />
+
+        {/* Detail slide-over */}
+        <SlideOver
+          isOpen={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+          title={selectedItem ? formatItemName(selectedItem) : ''}
+          description={selectedItem?.lot_number ? `Lot #${selectedItem.lot_number}` : undefined}
+          width="520px"
+          footer={
+            selectedItem && (
+              <>
+                <Button variant="ghost" onClick={() => setSelectedItem(null)}>
+                  Close
+                </Button>
+                <Button
+                  variant="secondary"
+                  leftIcon={<ExternalLink size={13} />}
+                  onClick={() => window.open(selectedItem.url, '_blank')}
+                >
+                  Open auction
+                </Button>
+                <Button variant="primary" leftIcon={<Gavel size={13} />}>
+                  Place bid
+                </Button>
+              </>
+            )
+          }
+        >
+          {selectedItem && <WatchListDetail item={selectedItem} />}
+        </SlideOver>
+      </div>
+    </ChartThemeProvider>
+  );
+}
+
+function WatchListDetail({ item }: { item: ResearchItem }) {
+  const tags = normalizeTags(item.tags);
+  const roi = calcRoi(item);
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Image */}
+      <div
+        className="aspect-[4/3] rounded-[var(--radius-md)] overflow-hidden"
+        style={{
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border-hairline)',
+        }}
+      >
+        {item.image_url ? (
+          <img
+            src={getHighResImageUrl(item.image_url)}
+            alt={formatItemName(item)}
+            className="w-full h-full object-contain"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--color-fg-subtle)' }}>
+            No image available
           </div>
         )}
       </div>
-    </th>
-  );
 
-  // Filter State
-  const [parentCategoryFilter, setParentCategoryFilter] = useState<string>('');
-  const [subCategoryFilter, setSubCategoryFilter] = useState<string>('');
-  const [auctionHouseFilter, setAuctionHouseFilter] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<ResearchItem | null>(null);
+      {/* Status row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone="accent" size="sm">
+          {AUCTION_HOUSES[item.auction_house_key] ?? item.auction_house_key}
+        </StatusBadge>
+        {item.condition && <StatusBadge tone="neutral" size="sm">{item.condition}</StatusBadge>}
+        {item.brand && <StatusBadge tone="subtle" size="sm">{item.brand}</StatusBadge>}
+        <StatusBadge tone="pending" size="sm" dot>
+          Watched
+        </StatusBadge>
+      </div>
 
-  const fetchWatchlist = async () => {
-    try {
-      const response = await fetch('/api/research/watchlist');
-      if (response.ok) {
-        const data = await response.json();
-        setItems(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch watchlist:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchWatchlist();
-    fetchSettings();
-  }, []);
-
-  const handleValuate = async (itemId: number) => {
-    setValuatingItems(prev => new Set(prev).add(itemId));
-    
-    const statuses = ["Analyzing item...", "Using AI...", "Checking eBay...", "Calculating ROI..."];
-    let statusIdx = 0;
-    setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
-    
-    const interval = setInterval(() => {
-      statusIdx = (statusIdx + 1) % statuses.length;
-      setValuationStatus(prev => ({ ...prev, [itemId]: statuses[statusIdx] }));
-    }, 2000);
-
-    try {
-      const response = await fetch(`/api/admin/valuate/${itemId}?target_roi=${targetRoi / 100}`, { method: 'POST' });
-      if (response.ok) {
-        const newValuation = await response.json();
-        setItems(prev => prev.map(item => 
-          item.id === itemId ? { ...item, valuation: newValuation } : item
-        ));
-        setValuationErrors(prev => {
-          const next = { ...prev };
-          delete next[itemId];
-          return next;
-        });
-        // Refresh comparables after valuation
-        fetchComparables(itemId, true);
-      } else {
-        const errData = await response.json().catch(() => ({ detail: "Valuation failed" }));
-        setValuationErrors(prev => ({ ...prev, [itemId]: errData.detail || "Valuation failed" }));
-      }
-    } catch (error) {
-      setValuationErrors(prev => ({ ...prev, [itemId]: "Network error" }));
-    } finally {
-      clearInterval(interval);
-      setValuatingItems(prev => {
-        const next = new Set(prev);
-        next.delete(itemId);
-        return next;
-      });
-      setValuationStatus(prev => {
-        const next = { ...prev };
-        delete next[itemId];
-        return next;
-      });
-    }
-  };
-
-  const fetchComparables = async (id: number, force = false) => {
-    if (!force && (comparables[id] || loadingComparables[id])) return;
-    setLoadingComparables(prev => ({...prev, [id]: true}));
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/research/${id}/comparables`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setComparables(prev => ({...prev, [id]: data}));
-      }
-    } catch (e) {
-      console.error('Failed to fetch comparables:', e);
-    } finally {
-      setLoadingComparables(prev => ({...prev, [id]: false}));
-    }
-  };
-
-  const openItemDetail = (item: ResearchItem) => {
-    setSelectedItem(item);
-    fetchComparables(item.id);
-  };
-
-  const handleMarginChange = (id: number, val: string | number) => {
-    setTargetMargins(prev => ({...prev, [id]: val}));
-  };
-
-  const persistMarginChange = async (id: number) => {
-    const rawVal = targetMargins[id] ?? 20;
-    const marginPct = (typeof rawVal === 'number' ? rawVal : parseFloat(rawVal as string)) / 100;
-    if (isNaN(marginPct)) return;
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/research/${id}/valuation/margin`, {
-        method: 'PATCH',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ target_roi_pct: marginPct })
-      });
-      if (response.ok) {
-        const updatedItem = await response.json();
-        setItems(prev => prev.map(it => it.id === id ? { ...it, valuation: updatedItem.valuation } : it));
-        if (selectedItem?.id === id) {
-          setSelectedItem(prev => prev ? { ...prev, valuation: updatedItem.valuation } : null);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to persist margin change:', e);
-    }
-  };
-
-  const removeFromWatchlist = async (itemId: number) => {
-    try {
-      const response = await fetch(`/api/research/${itemId}/watch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_watched: false })
-      });
-      if (response.ok) {
-        setItems(prev => prev.filter(item => item.id !== itemId));
-        if (selectedItem?.id === itemId) setSelectedItem(null);
-      }
-    } catch (error) {
-      console.error('Failed to remove item:', error);
-    }
-  };
-
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      let passesSearch = true;
-      if (searchQuery) {
-        const lowerQuery = searchQuery.toLowerCase();
-        const ahName = AUCTION_HOUSE_MAP[item.auction_house_key]?.name.toLowerCase() || '';
-        const itemName = formatItemName(item).toLowerCase();
-        passesSearch = itemName.includes(lowerQuery) ||
-                       item.title.toLowerCase().includes(lowerQuery) || 
-                       item.lot_number.toLowerCase().includes(lowerQuery) ||
-                       ahName.includes(lowerQuery) ||
-                       normalizeTags(item.tags).some(tag => 
-                         tag.fullTag.toLowerCase().includes(lowerQuery) || 
-                         tag.value.toLowerCase().includes(lowerQuery)
-                       );
-      }
-
-      let passesCategory = true;
-      if (parentCategoryFilter) {
-        if (subCategoryFilter) {
-          passesCategory = item.category === `${parentCategoryFilter} > ${subCategoryFilter}`;
-        } else {
-          passesCategory = item.category?.startsWith(parentCategoryFilter) || false;
-        }
-      }
-      
-      let passesAuctionHouse = true;
-      if (auctionHouseFilter) {
-        passesAuctionHouse = item.auction_house_key === auctionHouseFilter;
-      }
-
-      return passesSearch && passesCategory && passesAuctionHouse;
-    });
-  }, [items, searchQuery, parentCategoryFilter, subCategoryFilter, auctionHouseFilter]);
-
-  const itemsWithComputedRoi = useMemo(() => {
-    return filteredItems.map(item => {
-      let roi = null;
-      if (item.valuation) {
-        if (item.current_bid > 0) {
-          roi = ((item.valuation.est_market_value - item.current_bid) / item.current_bid) * 100;
-        } else {
-          roi = Infinity;
-        }
-      }
-      return { ...item, computedRoi: roi };
-    });
-  }, [filteredItems]);
-
-  const { items: sortedItems, requestSort, sortConfig } = useSortableData(itemsWithComputedRoi);
-
-  const { parentCategories, subCategoriesMap } = useMemo(() => {
-    const parents = new Set<string>();
-    const subsMap = new Map<string, Set<string>>();
-
-    items.forEach(item => {
-      if (item.category) {
-        const parts = item.category.split(' > ');
-        const parent = parts[0];
-        const sub = parts.length > 1 ? parts[1] : null;
-
-        parents.add(parent);
-        if (sub) {
-          if (!subsMap.has(parent)) {
-            subsMap.set(parent, new Set<string>());
-          }
-          subsMap.get(parent)!.add(sub);
-        }
-      }
-    });
-
-    const parentArray = Array.from(parents).sort();
-    const subsObject: Record<string, string[]> = {};
-    for (const [parent, subs] of subsMap.entries()) {
-      subsObject[parent] = Array.from(subs).sort();
-    }
-
-    return { parentCategories: parentArray, subCategoriesMap: subsObject };
-  }, [items]);
-
-  const renderSortIcon = (key: string) => {
-    if (sortConfig?.key === key) {
-      return sortConfig.direction === 'asc' ? <span className="sort-icon asc">↑</span> : <span className="sort-icon desc">↓</span>;
-    }
-    return <ArrowUpDown size={14} className="sort-icon neutral" />;
-  };
-
-  // KPI Calculations
-  const totalItemsCount = items.length;
-  const totalBidValue = items.reduce((sum, item) => sum + (item.current_bid || 0), 0);
-  const totalValue = items.reduce((sum, item) => sum + (item.valuation?.est_market_value || 0), 0);
-  const aggregateRoi = totalBidValue > 0 ? ((totalValue - totalBidValue) / totalBidValue) * 100 : (totalValue > 0 ? Infinity : 0);
-
-  if (loading) return <div className="loading">Loading items...</div>;
-
-  return (
-    <ViewContainer className="research-view">
-      <ViewHeader 
-        title="Watch List" 
-        subtitle="Track items you are interested in or bidding on."
-      />
-
-      <KpiBar>
-        <KpiCard 
-          icon={<Eye size={24} />} 
-          label="Items Watching" 
-          value={totalItemsCount} 
-          secondaryValue="Items"
-        />
-        <KpiCard 
-          icon={<Gavel size={24} />} 
-          label="Total Bid Value" 
-          value={`$${totalBidValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
-        />
-        <KpiCard 
-          icon={<DollarSign size={24} />} 
-          label="Total Value" 
-          value={`$${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
-        />
-        <KpiCard 
-          icon={<TrendingUp size={24} />} 
-          label="Aggregate ROI" 
-          value={aggregateRoi === Infinity ? '∞%' : `${Math.round(aggregateRoi)}%`} 
-        />
-      </KpiBar>
-
-      <section className="grid-section">
-        <FilterBar title="Watched Items">
-          <button 
-            className="action-btn"
-            onClick={() => setViewMode(prev => prev === 'table' ? 'grid' : 'table')}
-            title="Change View"
-            style={{ padding: '0.5rem 0.75rem' }}
-          >
-            {viewMode === 'table' ? <LayoutGrid size={16} /> : <List size={16} />}
-            <span>Change View</span>
-          </button>
-          <div className="roi-setting">
-            <Target size={16} />
-            <label>Target ROI:</label>
-            <input 
-              type="number" 
-              className="roi-input"
-              value={targetRoi} 
-              onChange={(e) => setTargetRoi(Number(e.target.value))}
-              min="0"
-              max="500"
-            />
-            <span className="roi-percent">%</span>
-          </div>
-          <select 
-            className="saas-input"
-            value={auctionHouseFilter}
-            onChange={(e) => setAuctionHouseFilter(e.target.value)}
-          >
-            <option value="">All Sources</option>
-            {Object.entries(AUCTION_HOUSE_MAP).map(([id, ah]) => (
-              <option key={id} value={id}>{ah.name}</option>
-            ))}
-          </select>
-          <input 
-            type="text" 
-            className="saas-input search-input"
-            placeholder="Search title, lot, or tags..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+      {/* Valuation card */}
+      <GlassSurface tier={2} radius="md" padded="md" className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-label-caps">Valuation</span>
+          {item.valuation?.sample_size && (
+            <span className="text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
+              Based on {item.valuation.sample_size} comps
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <DetailStat
+            label="Current Bid"
+            value={<Money value={item.current_bid} size="lg" />}
           />
-          <select 
-            className="saas-input"
-            value={parentCategoryFilter}
-            onChange={(e) => {
-              setParentCategoryFilter(e.target.value);
-              setSubCategoryFilter('');
-            }}
-          >
-            <option value="">All Categories</option>
-            {parentCategories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          <select 
-            className="saas-input"
-            value={subCategoryFilter}
-            onChange={(e) => setSubCategoryFilter(e.target.value)}
-            disabled={!parentCategoryFilter || !subCategoriesMap[parentCategoryFilter]}
-          >
-            <option value="">All Sub-Categories</option>
-            {parentCategoryFilter && subCategoriesMap[parentCategoryFilter]?.map(sub => (
-              <option key={sub} value={sub}>{sub}</option>
-            ))}
-          </select>
-        </FilterBar>
-
-        {viewMode === 'table' ? (
-          <table className="research-table">
-            <thead 
-              className={isEditMode ? 'edit-mode' : ''} 
-              onMouseDown={handleHeaderMouseDown} 
-              onMouseUp={handleHeaderMouseUpOrLeave} 
-              onMouseLeave={handleHeaderMouseUpOrLeave}
-            >
-              <tr>
-                {renderHeaderCell('image', <ImageIcon size={14} />)}
-                {renderHeaderCell('title', 'Title', 'title')}
-                {renderHeaderCell('lot', 'Lot', 'lot_number')}
-                {renderHeaderCell('source', 'Source', 'auction_house_key')}
-                {renderHeaderCell('category', 'Category')}
-                {renderHeaderCell('tags', 'Tags')}
-                {renderHeaderCell('bid', 'Bid', 'current_bid')}
-                {renderHeaderCell('estMarket', 'Est. Market', 'valuation.est_market_value')}
-                {renderHeaderCell('maxBid', 'Max Bid', 'valuation.max_bid_for_target_roi')}
-                {renderHeaderCell('roi', 'ROI %', 'computedRoi')}
-                {renderHeaderCell('time', 'Time Remaining', 'end_time')}
-                {renderHeaderCell('actions', 'Actions')}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedItems.map(item => {
-                const isValuating = valuatingItems.has(item.id);
-                
-                const getRoiClass = (roi: number | null) => {
-                  if (roi === null) return '';
-                  if (roi >= targetRoi) return 'roi-good';
-                  if (roi >= targetRoi - 10) return 'roi-warning';
-                  return 'roi-neutral';
-                };
-
-                return (
-                  <tr key={item.id}>
-                    <td style={{ ...getColStyle('image'), padding: '8px 12px' }}>
-                      <div className="table-img-wrapper">
-                        <img 
-                          src={item.image_url || '/placeholder.png'} 
-                          className="table-img clickable-img" 
-                          alt="" 
-                          onClick={() => openItemDetail(item)}
-                        />
-                      </div>
-                    </td>
-                    <td className="clickable-title" style={getColStyle('title')}>
-                      <div className="title-content">
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {formatItemName(item)} <ExternalLink size={12} className="inline-icon"/>
-                        </a>
-                      </div>
-                    </td>
-                    <td className="mono" style={getColStyle('lot')}>{item.lot_number}</td>
-                    <td style={getColStyle('source')}>
-                      <span className={`source-badge ${AUCTION_HOUSE_MAP[item.auction_house_key]?.className || 'source-default'}`}>
-                        {AUCTION_HOUSE_MAP[item.auction_house_key]?.short || 'Unknown'}
-                      </span>
-                    </td>
-                    <td style={getColStyle('category')}>
-                      {item.category && <span className="category-badge">{item.category}</span>}
-                    </td>
-                    <td style={getColStyle('tags')}>
-                      <div className="tags-container">
-                        {normalizeTags(item.tags).slice(0, 3).map((tag, idx) => (
-                          <span key={`${item.id}-tag-${idx}`} className={`tag-badge ${tag.key ? 'structured-tag' : ''}`}>
-                            <span className="tag-value">{tag.value}</span>
-                          </span>
-                        ))}
-                        {normalizeTags(item.tags).length > 3 && (
-                          <span className="tag-badge" style={{ opacity: 0.6, cursor: 'default' }}>
-                            +{normalizeTags(item.tags).length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="bold" style={getColStyle('bid')}>${item.current_bid.toFixed(2)}</td>
-                    <td style={getColStyle('estMarket')}>
-                      {item.valuation ? (
-                        <Tooltip text={
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', minWidth: '150px', padding: '4px' }}>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Query</div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'normal', lineHeight: 1.3 }}>"{item.valuation.search_query || 'Unknown'}"</div>
-                            <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
-                            <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
-                          </div>
-                        }>
-                          <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0,0,0,0.3)' }}>${item.valuation.est_market_value.toFixed(2)}</span>
-                        </Tooltip>
-                      ) : '--'}
-                    </td>
-                    <td style={getColStyle('maxBid')}>{item.valuation ? `$${item.valuation.max_bid_for_target_roi.toFixed(2)}` : '--'}</td>
-                    <td style={getColStyle('roi')}>
-                      {item.computedRoi !== null ? (
-                        <span className={`roi-badge ${getRoiClass(item.computedRoi)}`}>
-                          {item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`}
-                        </span>
-                      ) : '--'}
-                    </td>
-                    <td style={getColStyle('time')}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
-                        <span style={{ fontSize: '10px', opacity: 0.6 }}>{formatAuctionDate(item.end_time, timezone)}</span>
-                      </div>
-                    </td>
-                    <td style={getColStyle('actions')}>
-                      <div className="action-buttons-cell">
-                        <button 
-                          onClick={() => removeFromWatchlist(item.id)}
-                          className="glass-eye-btn small-action-icon watched"
-                          title="Remove from Watch List"
-                        >
-                          <X size={16} className="text-emerald-500" />
-                        </button>
-
-                        {isValuating ? (
-                          <div title={valuationStatus[item.id] || "Loading..."} className="small-action-icon-wrap" style={{ cursor: 'wait' }}>
-                            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--text-dim)' }} />
-                          </div>
-                        ) : valuationErrors[item.id] ? (
-                          <button 
-                            className="glass-eye-btn small-action-icon error-icon"
-                            title={valuationErrors[item.id] || "Valuation Error. Click to Retry."}
-                            onClick={() => handleValuate(item.id)}
-                          >
-                            <TrendingUp size={16} style={{ color: '#ef4444' }} />
-                          </button>
-                        ) : (
-                          <Tooltip text="Valuate Item">
-                            <button 
-                              className="glass-eye-btn small-action-icon"
-                              onClick={() => handleValuate(item.id)}
-                              disabled={isValuating}
-                            >
-                              <TrendingUp size={16} />
-                            </button>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="research-grid">
-            {sortedItems.map(item => {
-              const isValuating = valuatingItems.has(item.id);
-              
-              const getRoiClass = (roi: number | null) => {
-                if (roi === null) return '';
-                if (roi >= targetRoi) return 'roi-good';
-                if (roi >= targetRoi - 10) return 'roi-warning';
-                return 'roi-neutral';
-              };
-
-              return (
-                <div key={item.id} className="research-card">
-                  <div className="research-card-image-container">
-                    <button 
-                      className="remove-btn" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFromWatchlist(item.id);
-                      }}
-                      title="Remove from Watch List"
-                    >
-                      <X size={16} />
-                    </button>
-                    <div className="research-card-title-overlay">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="research-card-title" title={formatItemName(item)}>
-                        {formatItemName(item)}
-                      </a>
-                    </div>
-                    <img 
-                      src={item.image_url ? getHighResImageUrl(item.image_url) : '/placeholder.png'} 
-                      className="research-card-image" 
-                      alt={formatItemName(item)} 
-                      onClick={() => openItemDetail(item)}
-                    />
-                    <div className="watch-timer-overlay">
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <CountdownTimer endTime={item.end_time} className="timer-text" endedText="Ending Now" endedClassName="ending-now" />
-                        <span style={{ fontSize: '9px', opacity: 0.8 }}>{formatAuctionDate(item.end_time, timezone)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="research-card-content">
-                    <div className="research-card-stats">
-                      <div className="research-card-stat">
-                        <span className="stat-label">Bid</span>
-                        <span className="stat-value font-bold">${item.current_bid.toFixed(2)}</span>
-                      </div>
-                      
-                      {item.valuation && (
-                        <>
-                          <div className="research-card-stat">
-                            <span className="stat-label">Est. Value</span>
-                            <Tooltip text={
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', minWidth: '150px', padding: '4px' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Query</div>
-                                <div style={{ fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'normal', lineHeight: 1.3 }}>"{item.valuation.search_query || 'Unknown'}"</div>
-                                <div style={{ height: '1px', background: 'rgba(0,0,0,0.05)', margin: '4px 0' }} />
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sample Size</div>
-                                <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item.valuation.sample_size || 0} comparable items</div>
-                              </div>
-                            }>
-                              <span className="stat-value text-emerald-600 font-bold" style={{ cursor: 'help', borderBottom: '1px dashed rgba(16, 185, 129, 0.4)' }}>
-                                ${item.valuation.est_market_value.toFixed(2)}
-                              </span>
-                            </Tooltip>
-                          </div>
-                          <div className="research-card-stat">
-                            <span className="stat-label">ROI</span>
-                            {item.computedRoi !== null ? (
-                              <span className={`roi-badge ${getRoiClass(item.computedRoi)}`} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>
-                                {item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`}
-                              </span>
-                            ) : '--'}
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="research-card-actions">
-                      <button 
-                        onClick={() => removeFromWatchlist(item.id)}
-                        className="glass-eye-btn watched"
-                        title="Remove from Watch List"
-                      >
-                        <X size={16} className="text-emerald-500" />
-                      </button>
-
-                      {isValuating ? (
-                        <Loader2 size={16} className="spinning" />
-                      ) : valuationErrors[item.id] ? (
-                         <button 
-                          className="small-btn"
-                          onClick={() => handleValuate(item.id)}
-                        >
-                          Retry
-                        </button>
-                      ) : (
-                        <button 
-                          className="small-btn"
-                          onClick={() => handleValuate(item.id)}
-                          disabled={isValuating}
-                          style={{ flex: 1 }}
-                        >
-                          Valuate
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <DetailStat
+            label="Est. Market"
+            value={
+              item.valuation?.est_market_value ? (
+                <Money value={item.valuation.est_market_value} size="lg" />
+              ) : (
+                <span style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+              )
+            }
+          />
+          <DetailStat
+            label="Max Bid"
+            value={
+              item.valuation?.max_bid_for_target_roi ? (
+                <Money value={item.valuation.max_bid_for_target_roi} size="lg" tone="accent" />
+              ) : (
+                <span style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+              )
+            }
+          />
+        </div>
+        {roi !== null && (
+          <div className="flex items-center justify-between pt-3 hairline-t">
+            <span className="text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+              Projected ROI at current bid
+            </span>
+            <Percent value={roi} />
           </div>
         )}
-      </section>
+      </GlassSurface>
 
-      {isEditMode && (
-        <button className="floating-save-btn" onClick={saveColumnConfig} title="Save Column Layout">
-          <Save size={24} />
-        </button>
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-label-caps">Tags</span>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t, i) => (
+              <span
+                key={i}
+                className="text-[11px] px-2 py-0.5 rounded-md"
+                style={{
+                  background: 'var(--color-surface-2)',
+                  color: 'var(--color-fg-muted)',
+                }}
+                title={t.fullTag}
+              >
+                {t.key ? <span className="opacity-60">{t.key}:</span> : null} {t.value}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
-      <ItemDetailModal 
-        item={selectedItem} 
-        isOpen={!!selectedItem} 
-        onClose={() => setSelectedItem(null)}
-        viewContext="watchlist"
-        onValuate={(id) => handleValuate(id)}
-        isValuating={selectedItem ? valuatingItems.has(selectedItem.id) : false}
-        valuationStatusText={selectedItem ? valuationStatus[selectedItem.id] : undefined}
-        comparables={selectedItem ? comparables[selectedItem.id] : null}
-        loadingComparables={selectedItem ? loadingComparables[selectedItem.id] : false}
-        targetMargin={selectedItem ? targetMargins[selectedItem.id] : undefined}
-        onMarginChange={(val) => selectedItem && handleMarginChange(selectedItem.id, val)}
-        onPersistMargin={() => selectedItem && persistMarginChange(selectedItem.id)}
-        userTimezone={timezone}
-      />
-    </ViewContainer>
+      {/* Time remaining */}
+      <GlassSurface tier={2} radius="md" padded="sm" className="flex items-center justify-between">
+        <span className="text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+          Time remaining
+        </span>
+        <CountdownTimer endTime={item.end_time} pill />
+      </GlassSurface>
+    </div>
   );
-};
+}
 
-export default WatchListView;
+function DetailStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-label-caps">{label}</span>
+      <div>{value}</div>
+    </div>
+  );
+}

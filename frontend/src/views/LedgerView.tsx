@@ -1,360 +1,927 @@
-import React, { useState, useEffect } from 'react';
-import './StoreView.css'; // Reusing some glass styles
-import { ViewContainer, ViewHeader } from '../components/layout/ViewLayout';
-import { 
-  Plus, Trash2, Calendar, Repeat, DollarSign, Landmark,
-  Receipt, TrendingUp
+import { useState, useEffect, useMemo } from 'react';
+import {
+  DollarSign, TrendingUp, Repeat, BarChart3, Plus, Trash2, Pencil, Search,
 } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
+import {
+  Button, KpiTile, DataTable, FilterBar, StatusBadge, Money,
+  GlassSurface, GlassModal, EmptyState, ChartThemeProvider, ChartTooltip, useChartTheme,
+} from '../components/ui';
+import type { Column, Density, FilterChip, StatusTone } from '../components/ui';
+import { useToast } from '../components/shell/ToastProvider';
 
-interface Expense {
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+interface BusinessExpense {
   id: number;
   date: string;
   amount: number;
   payee: string;
   category: string;
-  description: string;
-  is_recurring: boolean;
+  description?: string;
+  is_recurring?: boolean;
+  recurring_frequency?: 'monthly' | 'quarterly' | 'yearly';
 }
 
-const CATEGORIES = ['Auto/Travel', 'Supplies', 'Rent/Lease', 'Software/Tech', 'Legal/Professional', 'Misc'];
+interface ExpenseStats {
+  by_category: Record<string, number>;
+  monthly: Record<string, number>;
+  totals: { month: number; ytd: number; recurring_monthly: number };
+}
 
-const LedgerView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'pnl'>('ledger');
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [stats, setStats] = useState({ totalExpenses: 0, byCategory: {} as Record<string, number> });
-  const [pnl, setPnl] = useState<any>(null);
+const DEFAULT_STATS: ExpenseStats = {
+  by_category: {},
+  monthly: {},
+  totals: { month: 0, ytd: 0, recurring_monthly: 0 },
+};
+
+const CATEGORY_OPTIONS = [
+  'Auto/Travel',
+  'Supplies',
+  'Rent',
+  'Software',
+  'Legal',
+] as const;
+
+function categoryTone(category: string): StatusTone {
+  const c = category.toLowerCase();
+  if (c.includes('software') || c.includes('legal') || c.includes('auto')) return 'insight';
+  if (c.includes('supplies')) return 'accent';
+  return 'neutral';
+}
+
+function currentYearMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function priorYearMonth(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatDateLabel(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
+
+function last12Months(monthly: Record<string, number>): { ym: string; label: string; value: number }[] {
+  const out: { ym: string; label: string; value: number }[] = [];
+  const today = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({
+      ym,
+      label: d.toLocaleDateString('en-US', { month: 'short' }),
+      value: Number(monthly[ym] ?? 0),
+    });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View
+// ─────────────────────────────────────────────────────────────────────────────
+export default function LedgerView() {
+  return (
+    <ChartThemeProvider>
+      <LedgerViewInner />
+    </ChartThemeProvider>
+  );
+}
+
+function LedgerViewInner() {
+  const { success, error: toastError } = useToast();
+  const chartTheme = useChartTheme();
+
+  const [expenses, setExpenses] = useState<BusinessExpense[]>([]);
+  const [stats, setStats] = useState<ExpenseStats>(DEFAULT_STATS);
   const [loading, setLoading] = useState(true);
-  const [isAdding, setIsAdding] = useState(false);
-  const [newExpense, setNewExpense] = useState({
-    amount: 0,
-    payee: '',
-    category: 'Supplies',
-    description: '',
-    is_recurring: false,
-    date: new Date().toISOString().split('T')[0]
-  });
 
-  const fetchData = async () => {
+  // Filters
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [density, setDensity] = useState<Density>('cozy');
+
+  // Modals
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<BusinessExpense | null>(null);
+
+  // ─── Data loading
+  const loadData = async () => {
     try {
-      const [listResp, statsResp, pnlResp] = await Promise.all([
+      const [listResp, statsResp] = await Promise.all([
         fetch('/api/expenses/'),
         fetch('/api/expenses/stats'),
-        fetch('/api/analytics/pnl?timeframe=YTD')
       ]);
-      if (listResp.ok) setExpenses(await listResp.json());
-      if (statsResp.ok) setStats(await statsResp.json());
-      if (pnlResp.ok) setPnl(await pnlResp.json());
-    } catch (error) {
-      console.error('Failed to fetch ledger data:', error);
+      if (listResp.ok) {
+        const data = await listResp.json();
+        setExpenses(Array.isArray(data) ? data : data?.items ?? []);
+      }
+      if (statsResp.ok) {
+        const raw = await statsResp.json();
+        setStats({
+          by_category: raw?.by_category ?? {},
+          monthly: raw?.monthly ?? {},
+          totals: {
+            month: Number(raw?.totals?.month ?? 0),
+            ytd: Number(raw?.totals?.ytd ?? 0),
+            recurring_monthly: Number(raw?.totals?.recurring_monthly ?? 0),
+          },
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load ledger:', e);
+      toastError('Failed to load ledger data');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreate = async () => {
-    try {
-      const response = await fetch('/api/expenses/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newExpense)
-      });
-      if (response.ok) {
-        await fetchData();
-        setIsAdding(false);
-        setNewExpense({
-          amount: 0,
-          payee: '',
-          category: 'Supplies',
-          description: '',
-          is_recurring: false,
-          date: new Date().toISOString().split('T')[0]
-        });
+  // ─── Derived: KPIs
+  const monthDelta = useMemo(() => {
+    const cur = stats.monthly[currentYearMonth()];
+    const prior = stats.monthly[priorYearMonth()];
+    if (cur === undefined || prior === undefined || prior === 0) return undefined;
+    return ((cur - prior) / prior) * 100;
+  }, [stats.monthly]);
+
+  const biggestCategory = useMemo(() => {
+    const entries = Object.entries(stats.by_category);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => b[1] - a[1]);
+    return { name: entries[0][0], amount: Number(entries[0][1]) };
+  }, [stats.by_category]);
+
+  // ─── Derived: charts
+  const categoryChartData = useMemo(() => {
+    return Object.entries(stats.by_category)
+      .map(([name, value]) => ({ name, value: Number(value) }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [stats.by_category]);
+
+  const monthlySeries = useMemo(() => last12Months(stats.monthly), [stats.monthly]);
+
+  const topPayees = useMemo(() => {
+    const byPayee: Record<string, number> = {};
+    for (const e of expenses) {
+      byPayee[e.payee] = (byPayee[e.payee] ?? 0) + Number(e.amount ?? 0);
+    }
+    return Object.entries(byPayee)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [expenses]);
+
+  const topPayeesMax = topPayees[0]?.amount ?? 0;
+
+  // ─── Filtering for table
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return expenses.filter((e) => {
+      if (q && !e.payee?.toLowerCase().includes(q) && !e.description?.toLowerCase().includes(q)) {
+        return false;
       }
-    } catch (error) {
-      console.error('Failed to create expense:', error);
-    }
-  };
+      if (categoryFilter.length > 0 && !categoryFilter.includes(e.category)) {
+        return false;
+      }
+      if (dateFrom && e.date < dateFrom) return false;
+      if (dateTo && e.date > dateTo) return false;
+      return true;
+    });
+  }, [expenses, search, categoryFilter, dateFrom, dateTo]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this expense?')) return;
+  const filterChips: FilterChip[] = useMemo(() => {
+    const chips: FilterChip[] = [];
+    for (const c of categoryFilter) {
+      chips.push({
+        id: `cat-${c}`,
+        label: 'Category',
+        value: c,
+        onClear: () => setCategoryFilter((prev) => prev.filter((x) => x !== c)),
+      });
+    }
+    if (dateFrom) chips.push({ id: 'from', label: 'From', value: dateFrom, onClear: () => setDateFrom('') });
+    if (dateTo) chips.push({ id: 'to', label: 'To', value: dateTo, onClear: () => setDateTo('') });
+    return chips;
+  }, [categoryFilter, dateFrom, dateTo]);
+
+  // ─── Mutations
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    const previous = expenses;
+    setExpenses((p) => p.filter((x) => x.id !== id));
+    setDeleteTarget(null);
     try {
-      const response = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
-      if (response.ok) fetchData();
-    } catch (error) {
-      console.error('Delete failed:', error);
+      const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('failed');
+      success('Expense deleted');
+      loadData();
+    } catch {
+      setExpenses(previous);
+      toastError('Could not delete expense');
     }
   };
 
-  if (loading) return <div className="loading">Loading business ledger...</div>;
+  // ─── Table columns
+  const columns: Column<BusinessExpense>[] = [
+    {
+      id: 'date',
+      header: 'Date',
+      width: 110,
+      sortable: true,
+      sortAccessor: (e) => e.date,
+      cell: (e) => (
+        <span className="text-sm tabular-nums" style={{ color: 'var(--color-fg)' }}>
+          {formatDateLabel(e.date)}
+        </span>
+      ),
+    },
+    {
+      id: 'payee',
+      header: 'Payee',
+      sortable: true,
+      sortAccessor: (e) => e.payee?.toLowerCase() ?? '',
+      cell: (e) => (
+        <span className="text-sm font-medium" style={{ color: 'var(--color-fg)' }}>
+          {e.payee}
+        </span>
+      ),
+    },
+    {
+      id: 'category',
+      header: 'Category',
+      width: 150,
+      cell: (e) => (
+        <StatusBadge tone={categoryTone(e.category)} size="xs">
+          {e.category}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: 'description',
+      header: 'Description',
+      cell: (e) => (
+        <span
+          className="text-sm truncate block max-w-[320px]"
+          style={{ color: 'var(--color-fg-muted)' }}
+          title={e.description}
+        >
+          {e.description ?? '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      width: 120,
+      sortable: true,
+      sortAccessor: (e) => Number(e.amount ?? 0),
+      cell: (e) => <Money value={Number(e.amount ?? 0)} size="sm" tone="loss" />,
+    },
+    {
+      id: 'recurring',
+      header: 'Recurring',
+      width: 110,
+      align: 'center',
+      cell: (e) =>
+        e.is_recurring ? (
+          <StatusBadge tone="insight" size="xs" dot>
+            {e.recurring_frequency ?? 'monthly'}
+          </StatusBadge>
+        ) : (
+          <span style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+        ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      width: 90,
+      align: 'right',
+      cell: (e) => (
+        <div className="flex items-center gap-1 justify-end" onClick={(ev) => ev.stopPropagation()}>
+          <button
+            type="button"
+            className="p-1.5 rounded transition-colors hover:bg-[var(--color-surface-2)] focus-ring"
+            title="Edit (coming soon)"
+            style={{ color: 'var(--color-fg-muted)' }}
+            disabled
+          >
+            <Pencil size={14} strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteTarget(e)}
+            className="p-1.5 rounded transition-colors hover:bg-[var(--color-surface-2)] focus-ring"
+            title="Delete expense"
+            style={{ color: 'var(--color-fg-muted)' }}
+          >
+            <Trash2 size={14} strokeWidth={1.75} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <ViewContainer className="ledger-view">
-      <ViewHeader 
-        title="Business Ledger" 
-        subtitle="Manage operational overhead and recurring business expenses."
-        actions={
-          <button className="action-btn primary" onClick={() => setIsAdding(true)}>
-            <Plus size={18} /> Log Expense
-          </button>
+    <div className="flex flex-col gap-5">
+      {/* ─── Top dashboard surface ─────────────────────────────────────── */}
+      <GlassSurface tier={2} padded="md" className="flex flex-col gap-5">
+        {/* KPI tiles */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiTile
+            label="This Month Spend"
+            value={<Money value={stats.totals.month} compact size="xl" tone="loss" />}
+            icon={<DollarSign size={14} />}
+            tone="loss"
+            delta={monthDelta}
+            deltaLabel="vs prior month"
+            index={0}
+          />
+          <KpiTile
+            label="YTD Spend"
+            value={<Money value={stats.totals.ytd} compact size="xl" />}
+            icon={<TrendingUp size={14} />}
+            tone="neutral"
+            index={1}
+          />
+          <KpiTile
+            label="Recurring Monthly"
+            value={<Money value={stats.totals.recurring_monthly} size="xl" tone="accent" />}
+            icon={<Repeat size={14} />}
+            tone="insight"
+            index={2}
+          />
+          <KpiTile
+            label="Biggest Category"
+            value={
+              biggestCategory ? (
+                <span className="text-[20px] font-semibold tracking-tight" style={{ color: 'var(--color-fg)' }}>
+                  {biggestCategory.name} ·{' '}
+                  <span style={{ color: 'var(--color-accent)' }}>
+                    ${Math.round(biggestCategory.amount).toLocaleString()}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-[20px]" style={{ color: 'var(--color-fg-subtle)' }}>—</span>
+              )
+            }
+            icon={<BarChart3 size={14} />}
+            tone="accent"
+            index={3}
+          />
+        </div>
+
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Pie chart */}
+          <GlassSurface tier={1} radius="md" padded="md" className="flex flex-col gap-3 min-h-[260px]">
+            <div className="flex items-center justify-between">
+              <span className="text-label-caps">By Category</span>
+              <span className="text-[11px]" style={{ color: 'var(--color-fg-subtle)' }}>
+                {categoryChartData.length} categories
+              </span>
+            </div>
+            {categoryChartData.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-fg-subtle)' }}>
+                <span className="text-sm">No spending yet</span>
+              </div>
+            ) : (
+              <>
+                <div className="h-[160px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="none"
+                        isAnimationActive
+                      >
+                        {categoryChartData.map((_, i) => (
+                          <Cell key={i} fill={chartTheme.palette[i % chartTheme.palette.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="flex flex-col gap-1.5">
+                  {categoryChartData.slice(0, 5).map((d, i) => (
+                    <li key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="flex items-center gap-2 truncate" style={{ color: 'var(--color-fg-muted)' }}>
+                        <span
+                          aria-hidden
+                          className="inline-block rounded-full"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            background: chartTheme.palette[i % chartTheme.palette.length],
+                          }}
+                        />
+                        <span className="truncate">{d.name}</span>
+                      </span>
+                      <Money value={d.value} size="xs" />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </GlassSurface>
+
+          {/* Area chart - spend over time */}
+          <GlassSurface tier={1} radius="md" padded="md" className="flex flex-col gap-3 min-h-[260px]">
+            <div className="flex items-center justify-between">
+              <span className="text-label-caps">Last 12 Months</span>
+              <span className="text-[11px]" style={{ color: 'var(--color-fg-subtle)' }}>
+                Monthly spend
+              </span>
+            </div>
+            <div className="flex-1 min-h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlySeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="ledger-area" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: chartTheme.axis, fontSize: 11, fontFamily: chartTheme.font }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: chartTheme.axis, fontSize: 11, fontFamily: chartTheme.font }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `$${Number(v) >= 1000 ? `${Math.round(Number(v) / 1000)}k` : v}`}
+                    width={44}
+                  />
+                  <RechartsTooltip content={<ChartTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="var(--color-accent)"
+                    strokeWidth={2}
+                    fill="url(#ledger-area)"
+                    isAnimationActive
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassSurface>
+
+          {/* Top 5 payees */}
+          <GlassSurface tier={1} radius="md" padded="md" className="flex flex-col gap-3 min-h-[260px]">
+            <div className="flex items-center justify-between">
+              <span className="text-label-caps">Top Payees</span>
+              <span className="text-[11px]" style={{ color: 'var(--color-fg-subtle)' }}>
+                All-time
+              </span>
+            </div>
+            {topPayees.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-fg-subtle)' }}>
+                <span className="text-sm">No payees yet</span>
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {topPayees.map((p) => {
+                  const pct = topPayeesMax > 0 ? Math.max(2, (p.amount / topPayeesMax) * 100) : 0;
+                  return (
+                    <li key={p.name} className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className="text-sm font-medium truncate"
+                          style={{ color: 'var(--color-fg)' }}
+                          title={p.name}
+                        >
+                          {p.name}
+                        </span>
+                        <Money value={p.amount} size="sm" />
+                      </div>
+                      <div
+                        className="h-1.5 rounded-full overflow-hidden"
+                        style={{ background: 'var(--color-surface-2)' }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${pct}%`,
+                            background: 'var(--color-accent)',
+                            transition: 'width 400ms ease-out',
+                          }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </GlassSurface>
+        </div>
+      </GlassSurface>
+
+      {/* ─── Filter bar ────────────────────────────────────────────────── */}
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search payee or description…"
+        chips={filterChips}
+        onClearAll={() => {
+          setCategoryFilter([]);
+          setDateFrom('');
+          setDateTo('');
+        }}
+        density={density}
+        onDensityChange={setDensity}
+        resultCount={filtered.length}
+        totalCount={expenses.length}
+        filtersSlot={
+          <>
+            <div className="flex flex-col gap-1">
+              <span className="text-label-caps">Category</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {CATEGORY_OPTIONS.map((c) => {
+                  const active = categoryFilter.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() =>
+                        setCategoryFilter((prev) =>
+                          active ? prev.filter((x) => x !== c) : [...prev, c]
+                        )
+                      }
+                      className="text-xs px-2.5 h-7 rounded-md transition-colors focus-ring"
+                      style={{
+                        background: active ? 'var(--color-accent-soft)' : 'var(--color-surface-1)',
+                        color: active ? 'var(--color-accent)' : 'var(--color-fg-muted)',
+                        border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border-hairline)'}`,
+                      }}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-label-caps">From</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-9 px-2 rounded-md text-xs"
+                style={{
+                  background: 'var(--color-surface-1)',
+                  color: 'var(--color-fg)',
+                  border: '1px solid var(--color-border-hairline)',
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-label-caps">To</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-9 px-2 rounded-md text-xs"
+                style={{
+                  background: 'var(--color-surface-1)',
+                  color: 'var(--color-fg)',
+                  border: '1px solid var(--color-border-hairline)',
+                }}
+              />
+            </div>
+          </>
         }
       />
 
-      <div className="flex gap-4 mb-6">
-        <button 
-          className={`tab-btn ${activeTab === 'ledger' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ledger')}
-        >
-          <Receipt size={18} /> Operational Ledger
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'pnl' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pnl')}
-        >
-          <TrendingUp size={18} /> Profit & Loss
-        </button>
-      </div>
+      {/* ─── Table ─────────────────────────────────────────────────────── */}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        keyField={(e) => e.id}
+        loading={loading}
+        density={density}
+        defaultSort={{ columnId: 'date', direction: 'desc' }}
+        emptyState={
+          <EmptyState
+            icon={<Search size={20} />}
+            title={search || categoryFilter.length || dateFrom || dateTo ? 'No matches' : 'No expenses logged'}
+            description={
+              search || categoryFilter.length || dateFrom || dateTo
+                ? 'Try clearing filters or adjusting your search.'
+                : 'Log your first business expense with the + button below.'
+            }
+          />
+        }
+      />
 
-      {activeTab === 'ledger' ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="glass-panel p-6 bg-rose-500/5 border-rose-500/20">
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-xs uppercase font-bold text-gray-500">Total Operational Overhead</span>
-                <Landmark size={20} className="text-rose-400" />
-              </div>
-              <div className="text-3xl font-bold text-white">${stats.totalExpenses.toLocaleString()}</div>
-              <div className="text-xs text-gray-500 mt-2">All-time operational spending</div>
-            </div>
+      {/* ─── Floating add button ──────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={() => setIsCreateOpen(true)}
+        aria-label="New expense"
+        className="fixed bottom-6 right-6 z-30 rounded-full flex items-center justify-center focus-ring transition-transform hover:scale-105 active:scale-95"
+        style={{
+          width: 52,
+          height: 52,
+          background: 'var(--color-accent)',
+          color: 'white',
+          boxShadow: 'var(--shadow-glass-md, 0 8px 32px rgba(0,0,0,0.16))',
+          border: '1px solid color-mix(in srgb, white 16%, transparent)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+        }}
+      >
+        <Plus size={22} strokeWidth={2} />
+      </button>
 
-            <div className="glass-panel p-6 col-span-2">
-              <h4 className="text-xs uppercase font-bold text-gray-500 mb-4">Spending by Category</h4>
-              <div className="flex flex-wrap gap-6">
-                {Object.entries(stats.byCategory).map(([cat, amount]) => (
-                  <div key={cat} className="flex flex-col">
-                    <span className="text-[10px] text-gray-500 uppercase font-bold">{cat}</span>
-                    <span className="text-white font-bold">${amount.toLocaleString()}</span>
-                    <div className="w-24 h-1 bg-white/5 rounded-full mt-1">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full" 
-                        style={{ width: `${(amount / stats.totalExpenses) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* ─── Create modal ─────────────────────────────────────────────── */}
+      <CreateExpenseModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={(created) => {
+          // Optimistic prepend; refresh stats from server
+          setExpenses((prev) => [created, ...prev]);
+          loadData();
+        }}
+      />
+
+      {/* ─── Delete confirm ───────────────────────────────────────────── */}
+      <GlassModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        size="sm"
+        title="Delete expense?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </>
+        }
+      >
+        {deleteTarget && (
+          <div className="flex flex-col gap-2 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+            <p>
+              This will permanently remove the expense{' '}
+              <span style={{ color: 'var(--color-fg)' }}>“{deleteTarget.payee}”</span> on{' '}
+              <span style={{ color: 'var(--color-fg)' }}>{formatDateLabel(deleteTarget.date)}</span>.
+            </p>
+            <p>This action cannot be undone.</p>
           </div>
-
-          {isAdding && (
-            <div className="glass-panel p-6 mb-8 border-2 border-blue-500/30 animate-in zoom-in-95">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div className="field-group">
-                  <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Amount ($)</label>
-                  <div className="relative">
-                    <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input 
-                      type="number" 
-                      className="frosted-input-large pl-10"
-                      value={newExpense.amount}
-                      onChange={e => setNewExpense({...newExpense, amount: parseFloat(e.target.value) || 0})}
-                    />
-                  </div>
-                </div>
-                <div className="field-group">
-                  <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Payee / Vendor</label>
-                  <input 
-                    type="text" 
-                    className="frosted-input-large"
-                    placeholder="e.g. Storage Unit X"
-                    value={newExpense.payee}
-                    onChange={e => setNewExpense({...newExpense, payee: e.target.value})}
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Category</label>
-                  <select 
-                    className="frosted-input-large"
-                    value={newExpense.category}
-                    onChange={e => setNewExpense({...newExpense, category: e.target.value})}
-                  >
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="field-group">
-                  <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Description</label>
-                  <input 
-                    type="text" 
-                    className="frosted-input-large"
-                    placeholder="Monthly rent, tape, etc."
-                    value={newExpense.description}
-                    onChange={e => setNewExpense({...newExpense, description: e.target.value})}
-                  />
-                </div>
-                <div className="flex items-center gap-8 pt-8">
-                  <div className="field-group flex-1">
-                    <input 
-                      type="date" 
-                      className="frosted-input-large"
-                      value={newExpense.date}
-                      onChange={e => setNewExpense({...newExpense, date: e.target.value})}
-                    />
-                  </div>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className={`w-10 h-6 rounded-full transition-colors relative ${newExpense.is_recurring ? 'bg-blue-500' : 'bg-white/10'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${newExpense.is_recurring ? 'left-5' : 'left-1'}`} />
-                    </div>
-                    <span className="text-sm font-bold text-gray-300">Recurring</span>
-                    <input 
-                      type="checkbox" 
-                      className="hidden"
-                      checked={newExpense.is_recurring}
-                      onChange={e => setNewExpense({...newExpense, is_recurring: e.target.checked})}
-                    />
-                  </label>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-6 border-t border-white/5">
-                <button className="action-btn outline" onClick={() => setIsAdding(false)}>Cancel</button>
-                <button className="action-btn primary px-12" onClick={handleCreate}>Save Expense</button>
-              </div>
-            </div>
-          )}
-
-          <div className="glass-panel overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-white/5 text-[10px] uppercase font-bold text-gray-500 tracking-widest">
-                <tr>
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Payee & Description</th>
-                  <th className="p-4">Category</th>
-                  <th className="p-4 text-right">Amount</th>
-                  <th className="p-4 w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {expenses.map(expense => (
-                  <tr key={expense.id} className="group hover:bg-white/5 transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <Calendar size={14} className="text-gray-500" />
-                        <span className="text-sm text-gray-300">{new Date(expense.date).toLocaleDateString()}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-col">
-                        <span className="text-white font-bold">{expense.payee}</span>
-                        <span className="text-xs text-gray-500">{expense.description}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-[10px] uppercase font-bold px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-400">
-                        {expense.category}
-                      </span>
-                      {expense.is_recurring && <Repeat size={12} className="inline ml-2 text-blue-400" />}
-                    </td>
-                    <td className="p-4 text-right">
-                      <span className="text-rose-400 font-bold text-lg">-${expense.amount.toFixed(2)}</span>
-                    </td>
-                    <td className="p-4">
-                      <button 
-                        className="p-2 text-gray-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                        onClick={() => handleDelete(expense.id)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
-        <div className="pnl-dashboard animate-in fade-in">
-          {pnl && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                <div className="glass-panel p-6">
-                  <span className="text-[10px] uppercase font-bold text-gray-500">Gross Revenue</span>
-                  <div className="text-2xl font-bold text-white mt-1">${pnl.revenue.toLocaleString()}</div>
-                </div>
-                <div className="glass-panel p-6">
-                  <span className="text-[10px] uppercase font-bold text-gray-500">Total COGS (Sourced)</span>
-                  <div className="text-2xl font-bold text-rose-400 mt-1">-${pnl.cogs.toLocaleString()}</div>
-                </div>
-                <div className="glass-panel p-6">
-                  <span className="text-[10px] uppercase font-bold text-gray-500">EBay Fees & Shipping</span>
-                  <div className="text-2xl font-bold text-rose-400 mt-1">-${(pnl.ebayFees + pnl.shippingCosts).toLocaleString()}</div>
-                </div>
-                <div className="glass-panel p-6 bg-emerald-500/10 border-emerald-500/20">
-                  <span className="text-[10px] uppercase font-bold text-emerald-400">Total Business Net</span>
-                  <div className="text-2xl font-bold text-emerald-400 mt-1">${pnl.netBusinessIncome.toLocaleString()}</div>
-                  <div className="text-[10px] font-bold text-emerald-500/70 mt-1">{pnl.margin.toFixed(1)}% Net Margin</div>
-                </div>
-              </div>
-
-              <div className="glass-panel p-8">
-                <h3 className="text-xl font-bold text-white mb-8">Statement of Profit and Loss (YTD)</h3>
-                
-                <div className="space-y-6 max-w-2xl">
-                  <div className="flex justify-between items-center text-lg">
-                    <span className="text-gray-300">Total Revenue (Gross Sales)</span>
-                    <span className="text-white font-bold">${pnl.revenue.toLocaleString()}</span>
-                  </div>
-                  
-                  <div className="pl-4 space-y-2 border-l-2 border-white/5">
-                    <div className="flex justify-between items-center text-sm text-gray-500">
-                      <span>Inventory Sourcing Costs (COGS)</span>
-                      <span>-${pnl.cogs.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm text-gray-500">
-                      <span>EBay Final Value Fees</span>
-                      <span>-${pnl.ebayFees.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm text-gray-500">
-                      <span>Outbound Shipping & Labels</span>
-                      <span>-${pnl.shippingCosts.toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-md pt-4 border-t border-white/5">
-                    <span className="text-gray-400 font-bold italic">Gross Inventory Profit</span>
-                    <span className="text-emerald-400 font-bold">${pnl.grossProfit.toLocaleString()}</span>
-                  </div>
-
-                  <div className="pt-4 space-y-4">
-                    <div className="flex justify-between items-center text-lg">
-                      <span className="text-gray-300">Operational Overhead (Ledger)</span>
-                      <span className="text-rose-400 font-bold">-${pnl.operationalOverhead.toLocaleString()}</span>
-                    </div>
-                    <div className="pl-4 space-y-2 border-l-2 border-white/5">
-                      {Object.entries(stats.byCategory).map(([cat, amount]) => (
-                        <div key={cat} className="flex justify-between items-center text-xs text-gray-500">
-                          <span>{cat}</span>
-                          <span>-${amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-3xl pt-8 border-t-2 border-white/10">
-                    <span className="text-white font-black">Net Business Income</span>
-                    <span className="text-emerald-400 font-black">${pnl.netBusinessIncome.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </ViewContainer>
+        )}
+      </GlassModal>
+    </div>
   );
-};
+}
 
-export default LedgerView;
+// ─────────────────────────────────────────────────────────────────────────────
+// Create modal
+// ─────────────────────────────────────────────────────────────────────────────
+interface CreateExpenseModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreated: (e: BusinessExpense) => void;
+}
+
+function CreateExpenseModal({ isOpen, onClose, onCreated }: CreateExpenseModalProps) {
+  const { success, error: toastError } = useToast();
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const [date, setDate] = useState(todayStr);
+  const [payee, setPayee] = useState('');
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState<string>('Supplies');
+  const [description, setDescription] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [frequency, setFrequency] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Reset when reopened
+  useEffect(() => {
+    if (isOpen) {
+      setDate(new Date().toISOString().split('T')[0]);
+      setPayee('');
+      setAmount('');
+      setCategory('Supplies');
+      setDescription('');
+      setIsRecurring(false);
+      setFrequency('monthly');
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const amt = parseFloat(amount);
+    if (!payee.trim()) {
+      toastError('Payee is required');
+      return;
+    }
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toastError('Enter a valid amount');
+      return;
+    }
+    setSubmitting(true);
+    const body: Record<string, unknown> = {
+      date,
+      payee: payee.trim(),
+      amount: amt,
+      category,
+      description: description.trim() || undefined,
+      is_recurring: isRecurring,
+    };
+    if (isRecurring) body.recurring_frequency = frequency;
+
+    try {
+      const res = await fetch('/api/expenses/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const created = (await res.json()) as BusinessExpense;
+      onCreated(created);
+      success('Expense logged');
+      onClose();
+    } catch (err) {
+      console.error(err);
+      toastError('Could not save expense');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <GlassModal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      title="New Expense"
+      description="Log a one-time or recurring business expense."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={() => handleSubmit()} isLoading={submitting}>
+            Save expense
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FieldLabel label="Date">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="modal-input"
+            />
+          </FieldLabel>
+          <FieldLabel label="Amount">
+            <div className="relative">
+              <span
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm"
+                style={{ color: 'var(--color-fg-muted)' }}
+              >
+                $
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="modal-input pl-6"
+              />
+            </div>
+          </FieldLabel>
+        </div>
+
+        <FieldLabel label="Payee">
+          <input
+            type="text"
+            value={payee}
+            onChange={(e) => setPayee(e.target.value)}
+            placeholder="Vendor name"
+            className="modal-input"
+            autoFocus
+          />
+        </FieldLabel>
+
+        <FieldLabel label="Category">
+          <input
+            list="ledger-categories"
+            type="text"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="modal-input"
+          />
+          <datalist id="ledger-categories">
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </FieldLabel>
+
+        <FieldLabel label="Description (optional)">
+          <textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional notes"
+            className="modal-input resize-none"
+          />
+        </FieldLabel>
+
+        <label
+          className="flex items-center gap-3 cursor-pointer px-3 h-10 rounded-md"
+          style={{
+            background: 'var(--color-surface-1)',
+            border: '1px solid var(--color-border-hairline)',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isRecurring}
+            onChange={(e) => setIsRecurring(e.target.checked)}
+          />
+          <span className="text-sm" style={{ color: 'var(--color-fg)' }}>
+            Recurring expense
+          </span>
+        </label>
+
+        {isRecurring && (
+          <FieldLabel label="Frequency">
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as typeof frequency)}
+              className="modal-input"
+            >
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </FieldLabel>
+        )}
+      </form>
+
+      {/* Local field styling — keeps spec compliance with semantic vars */}
+      <style>{`
+        .modal-input {
+          width: 100%;
+          height: 38px;
+          padding: 0 10px;
+          font-size: 13px;
+          color: var(--color-fg);
+          background: var(--color-surface-1);
+          border: 1px solid var(--color-border-hairline);
+          border-radius: var(--radius-sm);
+          outline: none;
+          transition: border-color 120ms ease, background 120ms ease;
+        }
+        textarea.modal-input { height: auto; padding: 8px 10px; line-height: 1.4; }
+        .modal-input:focus {
+          border-color: var(--color-accent);
+          background: var(--color-surface-2);
+        }
+      `}</style>
+    </GlassModal>
+  );
+}
+
+function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-label-caps">{label}</span>
+      {children}
+    </label>
+  );
+}

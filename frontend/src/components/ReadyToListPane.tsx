@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DollarSign, ExternalLink, Send, Info } from 'lucide-react';
+import { formatItemName } from '../utils/formatters';
 
 interface ReadyItem {
   id: number;
@@ -7,6 +8,9 @@ interface ReadyItem {
   total_cogs: number;
   estimated_price: number;
   suggested_package_cost: number;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
 }
 
 interface ReadyToListPaneProps {
@@ -44,7 +48,7 @@ const ReadyToListPane: React.FC<ReadyToListPaneProps> = ({ items, onList }) => {
             <div key={item.id} className="listing-prep-card glass-panel p-4 bg-white/5 border-white/10 hover:border-blue-500/30 transition-all">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="item-details">
-                  <h4 className="text-white font-medium mb-1 truncate" title={item.title}>{item.title}</h4>
+                  <h4 className="text-white font-medium mb-1 truncate" title={formatItemName(item)}>{formatItemName(item)}</h4>
                   <div className="flex gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1"><DollarSign size={12}/> COGS: ${item.total_cogs.toFixed(2)}</span>
                     <span className="flex items-center gap-1"><Info size={12}/> Pack: ${item.suggested_package_cost.toFixed(2)}</span>
@@ -66,7 +70,7 @@ const ReadyToListPane: React.FC<ReadyToListPaneProps> = ({ items, onList }) => {
                     <button 
                       className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30"
                       title="Check Sold Comps"
-                      onClick={() => window.open(`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(item.title)}&_sacat=0&LH_Sold=1&LH_Complete=1`, '_blank')}
+                      onClick={() => window.open(`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(formatItemName(item))}&_sacat=0&LH_Sold=1&LH_Complete=1`, '_blank')}
                     >
                       <ExternalLink size={18} />
                     </button>

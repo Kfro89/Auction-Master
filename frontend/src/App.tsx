@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
-import './App.css';
-import Navigation from './components/Navigation';
-import CommandPalette from './components/CommandPalette';
+import { useState } from 'react';
+import { AppShell } from './components/shell/AppShell';
 import ResearchView from './views/ResearchView';
 import VehiclesView from './views/VehiclesView';
 import SettingsView from './views/SettingsView';
@@ -13,23 +11,23 @@ import LoginView from './views/LoginView';
 import WatchListView from './views/WatchListView';
 import RmaView from './views/RmaView';
 import { FulfillmentView } from './views/FulfillmentView';
-import { CommandProvider } from './contexts/CommandContext';
+
+const VIEW_META: Record<string, { title: string; subtitle?: string }> = {
+  research: { title: 'Research', subtitle: 'Evaluate auction items and lock in target bids' },
+  watchlist: { title: 'Watchlist', subtitle: 'Items you are tracking for upcoming auctions' },
+  bidding: { title: 'Bidding', subtitle: 'Active bids, exposure, and projected profit' },
+  vehicles: { title: 'Vehicles', subtitle: 'Vehicle-specific research and valuation' },
+  'work-queue': { title: 'Work Queue', subtitle: 'Move acquired items through the fulfillment pipeline' },
+  fulfillment: { title: 'Fulfillment', subtitle: 'Pick, pack, ship, and track sold orders' },
+  rma: { title: 'Returns', subtitle: 'Manage returns and RMA processing' },
+  store: { title: 'Store', subtitle: 'Active eBay listings and store performance' },
+  ledger: { title: 'Business Ledger', subtitle: 'Operating costs, recurring expenses, and P&L' },
+  settings: { title: 'Settings', subtitle: 'Account, integrations, and appearance' },
+};
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('am_token'));
   const [activeTab, setActiveTab] = useState('research');
-  const [isCmdOpen, setIsCmdOpen] = useState(false);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsCmdOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   if (!token) {
     return <LoginView onLogin={setToken} />;
@@ -58,27 +56,16 @@ function App() {
       case 'settings':
         return <SettingsView />;
       default:
-        return <div><h1>Select a Tab</h1></div>;
+        return null;
     }
   };
 
+  const meta = VIEW_META[activeTab] ?? { title: '' };
+
   return (
-    <CommandProvider>
-      <div className="app-shell">
-        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-        <main className="main-content">
-          <div className="cmd-hint" onClick={() => setIsCmdOpen(true)}>
-            Press ⌘K to open Command Palette
-          </div>
-          {renderContent()}
-        </main>
-        <CommandPalette 
-          isOpen={isCmdOpen} 
-          onClose={() => setIsCmdOpen(false)} 
-          onNavigate={setActiveTab} 
-        />
-      </div>
-    </CommandProvider>
+    <AppShell activeTab={activeTab} onTabChange={setActiveTab} title={meta.title} subtitle={meta.subtitle}>
+      {renderContent()}
+    </AppShell>
   );
 }
 

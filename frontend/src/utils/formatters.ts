@@ -45,3 +45,15 @@ export const formatAuctionDate = (dateString: string | null | undefined, timezon
   return new Intl.DateTimeFormat('en-US', options).format(date);
 };
 
+export const formatItemName = (item: any) => {
+  const productName = item.product_name || "";
+
+  // If product_name is missing or very generic, fallback to title
+  if (!productName || productName.length < 3) {
+      return item.title || `Item #${item.id}`;
+  }
+
+  return productName;
+};
+
+

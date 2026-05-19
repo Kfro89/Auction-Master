@@ -1,114 +1,162 @@
-import React, { useState } from 'react';
-import { Camera, ShieldAlert, Search } from 'lucide-react';
+import { useState } from 'react';
+import { Camera, ShieldAlert, Search, Loader2 } from 'lucide-react';
+import { Button, GlassSurface, StatusBadge, EmptyState } from '../components/ui';
+import { useToast } from '../components/shell/ToastProvider';
+import { formatItemName } from '../utils/formatters';
 
 interface InventoryItem {
-    id: number;
-    anti_tamper_tag?: string;
-    title?: string;
+  id: number;
+  anti_tamper_tag?: string;
+  title?: string;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
 }
 
-const RmaView: React.FC = () => {
-    const [confirmed, setConfirmed] = useState(false);
-    const [itemIdInput, setItemIdInput] = useState('');
-    const [item, setItem] = useState<InventoryItem | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+export default function RmaView() {
+  const { success, error: toastError } = useToast();
+  const [confirmed, setConfirmed] = useState(false);
+  const [itemIdInput, setItemIdInput] = useState('');
+  const [item, setItem] = useState<InventoryItem | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    const handleFetchItem = async () => {
-        if (!itemIdInput) return;
-        setLoading(true);
-        setError('');
-        try {
-            const response = await fetch(`/api/inventory/${itemIdInput}`);
-            if (response.ok) {
-                const foundItem: InventoryItem = await response.json();
-                setItem(foundItem);
-            } else {
-                setError('Item not found');
-                setItem(null);
-            }
-        } catch (err) {
-            setError('Error fetching item');
-            setItem(null);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleFetchItem = async () => {
+    if (!itemIdInput) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/${itemIdInput}`);
+      if (res.ok) {
+        setItem(await res.json());
+      } else {
+        toastError('Item not found');
+        setItem(null);
+      }
+    } catch {
+      toastError('Network error');
+      setItem(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <div className="flex flex-col h-full w-full bg-slate-50/50 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm p-6 gap-6">
-            <div className="flex items-center gap-4 bg-white/80 p-4 rounded-xl border border-slate-200/50 shadow-sm">
-                <div className="flex items-center gap-2 flex-1">
-                    <label className="text-sm font-medium text-slate-700">Enter Item ID:</label>
-                    <input 
-                        type="text" 
-                        value={itemIdInput}
-                        onChange={(e) => setItemIdInput(e.target.value)}
-                        className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 bg-white shadow-sm flex-1 max-w-xs"
-                        placeholder="e.g. 123"
-                    />
-                    <button 
-                        onClick={handleFetchItem}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50 font-medium"
-                    >
-                        {loading ? <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white"></span> : <Search size={16} />}
-                        Fetch Item
-                    </button>
-                </div>
-                {error && <span className="text-red-500 text-sm font-medium">{error}</span>}
-                {item && <span className="text-emerald-600 text-sm font-medium flex items-center gap-2">Item Loaded: {item.title || `ID ${item.id}`}</span>}
-            </div>
-
-            <div className="flex w-full gap-6 flex-1">
-                <div className="flex-1 p-8 bg-white/80 rounded-xl border border-slate-200/50 shadow-sm flex flex-col">
-                    <h2 className="text-slate-900 text-2xl font-semibold mb-6 tracking-tight">Original Staging Data</h2>
-                    <div className="bg-white p-8 rounded-xl border border-slate-100 shadow-sm flex flex-col flex-1">
-                        <p className="text-slate-600 mb-6 font-medium text-lg flex flex-col gap-1">
-                            <span className="text-slate-400 uppercase text-xs tracking-wider">Anti-Tamper Tag:</span>
-                            <span className="text-slate-800 text-xl font-mono bg-slate-50 px-4 py-2 rounded-lg border border-slate-100 w-fit">
-                                {item ? (item.anti_tamper_tag || 'No tag assigned') : '---'}
-                            </span>
-                        </p>
-                        <div className="w-full flex-1 min-h-[250px] bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center text-slate-300">
-                            <Camera size={48} strokeWidth={1.5} />
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="flex-1 p-8 bg-white/80 rounded-xl border border-slate-200/50 shadow-sm flex flex-col">
-                    <h2 className="text-slate-900 text-2xl font-semibold mb-6 tracking-tight">Return Verification</h2>
-                    <div className="bg-white p-8 rounded-xl border border-slate-100 shadow-sm flex flex-col flex-1">
-                        <button className="w-full mb-8 py-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white rounded-xl border-none font-medium cursor-pointer flex items-center justify-center gap-3 shadow-sm shadow-indigo-200">
-                            <Camera size={20} strokeWidth={2} /> Activate Scanner
-                        </button>
-                        
-                        <div className="flex-1" />
-                        
-                        <label className="flex items-start gap-4 cursor-pointer text-slate-700 p-4 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors">
-                            <input 
-                                type="checkbox" 
-                                checked={confirmed} 
-                                onChange={(e) => setConfirmed(e.target.checked)} 
-                                className="w-5 h-5 mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" 
-                            /> 
-                            <span className="leading-relaxed">I confirm the anti-tamper tag is intact and matches original photos.</span>
-                        </label>
-                        
-                        <button 
-                            disabled={!confirmed || !item}
-                            className={`mt-6 flex items-center justify-center gap-3 w-full py-4 text-white rounded-xl border-none font-semibold transition-all duration-200 shadow-sm ${
-                                confirmed && item
-                                ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-200 cursor-pointer' 
-                                : 'bg-slate-200 cursor-not-allowed opacity-70 text-slate-500'
-                            }`}>
-                            <ShieldAlert size={20} strokeWidth={2} /> Issue Refund
-                        </button>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="flex flex-col gap-5">
+      <GlassSurface tier={2} radius="md" padded="md" className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-col gap-1 flex-1 min-w-[260px]">
+          <span className="text-label-caps">Item ID</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={itemIdInput}
+              onChange={(e) => setItemIdInput(e.target.value)}
+              placeholder="e.g. 123"
+              className="flex-1"
+            />
+            <Button
+              variant="primary"
+              onClick={handleFetchItem}
+              disabled={loading || !itemIdInput}
+              leftIcon={loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            >
+              Fetch
+            </Button>
+          </div>
         </div>
-    );
-};
+        {item && (
+          <div className="flex items-center gap-2">
+            <StatusBadge tone="profit" dot>Loaded</StatusBadge>
+            <span className="text-sm" style={{ color: 'var(--color-fg)' }}>
+              {formatItemName(item)}
+            </span>
+          </div>
+        )}
+      </GlassSurface>
 
-export default RmaView;
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <GlassSurface tier={2} radius="md" padded="md" className="flex flex-col gap-4">
+          <h2 className="text-headline-md" style={{ color: 'var(--color-fg)' }}>
+            Original Staging
+          </h2>
+          <div className="flex flex-col gap-1">
+            <span className="text-label-caps">Anti-Tamper Tag</span>
+            <span
+              className="text-base font-mono px-3 py-2 rounded-md w-fit"
+              style={{
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-border-hairline)',
+                color: 'var(--color-fg)',
+              }}
+            >
+              {item?.anti_tamper_tag || '—'}
+            </span>
+          </div>
+          <div
+            className="flex-1 min-h-[220px] rounded-md flex items-center justify-center"
+            style={{
+              background: 'var(--color-surface-2)',
+              border: '1px dashed var(--color-border-hairline)',
+              color: 'var(--color-fg-subtle)',
+            }}
+          >
+            <Camera size={40} strokeWidth={1.25} />
+          </div>
+        </GlassSurface>
+
+        <GlassSurface tier={2} radius="md" padded="md" className="flex flex-col gap-4">
+          <h2 className="text-headline-md" style={{ color: 'var(--color-fg)' }}>
+            Verification
+          </h2>
+
+          <Button
+            variant="secondary"
+            size="lg"
+            leftIcon={<Camera size={16} />}
+            className="w-full"
+            disabled={!item}
+          >
+            Activate Scanner
+          </Button>
+
+          <div className="flex-1" />
+
+          <label
+            className="flex items-start gap-3 p-3 rounded-md cursor-pointer transition-colors"
+            style={{
+              background: 'var(--color-surface-1)',
+              border: '1px solid var(--color-border-hairline)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              className="mt-1"
+            />
+            <span className="text-sm" style={{ color: 'var(--color-fg)' }}>
+              I confirm the anti-tamper tag is intact and matches original photos.
+            </span>
+          </label>
+
+          <Button
+            variant="destructive"
+            size="lg"
+            disabled={!confirmed || !item}
+            className="w-full"
+            leftIcon={<ShieldAlert size={16} />}
+            onClick={() => success('Refund issued', `Item ${item?.id}`)}
+          >
+            Issue Refund
+          </Button>
+        </GlassSurface>
+      </div>
+
+      {!item && (
+        <EmptyState
+          icon={<ShieldAlert size={20} />}
+          title="No item loaded"
+          description="Enter an inventory item ID above to begin return verification."
+        />
+      )}
+    </div>
+  );
+}

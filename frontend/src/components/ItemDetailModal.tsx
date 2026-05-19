@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import './ItemDetailModal.css';
 import Modal from './Modal';
-import { CalendarDays, LayoutGrid, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
+import { 
+  ExternalLink, 
+  Loader2, 
+  Package, 
+  RotateCcw, 
+  ChevronLeft, 
+  ChevronRight, 
+  TrendingUp,
+  Timer,
+  Activity,
+  CheckCircle2,
+  Gauge,
+  Wrench,
+  Gavel,
+  DollarSign,
+  Target
+} from 'lucide-react';
 import { CountdownTimer } from './CountdownTimer';
-import { normalizeTags, getHighResImageUrl, formatAuctionDate } from '../utils/formatters';
+import { normalizeTags, getHighResImageUrl, formatAuctionDate, formatItemName } from '../utils/formatters';
 
 export interface ModalItem {
   id: number;
@@ -15,7 +30,7 @@ export interface ModalItem {
   image_url?: string;
   images?: string[];
   category?: string;
-  tags?: any;
+  tags?: unknown;
   valuation?: {
     est_market_value: number;
     max_bid_for_target_roi: number;
@@ -24,6 +39,7 @@ export interface ModalItem {
     sample_size?: number;
   };
   is_watched?: boolean;
+  is_archived?: boolean;
   user_bids?: {
     current_bid_amount?: number;
     user_bid_amount?: number;
@@ -38,12 +54,16 @@ export interface ModalItem {
   vehicle_model?: string;
   vehicle_trim?: string;
   auction_house_key?: string;
+  product_name?: string;
+  brand?: string;
+  condition?: string;
 }
 
 const AUCTION_HOUSE_MAP: Record<string, { name: string, short: string, className: string }> = {
   'rol': { name: 'Roller', short: 'Roller', className: 'source-roller' },
   'rmeb': { name: 'Whitley', short: 'Whitley', className: 'source-whitley' },
   'public_surplus': { name: 'Public Surplus', short: 'PS', className: 'source-ps' },
+  'govdeals': { name: 'GovDeals', short: 'GD', className: 'source-gd' },
   'dickensheet': { name: 'Dickensheet', short: 'Dickensheet', className: 'source-dickensheet' },
 };
 
@@ -57,15 +77,15 @@ interface ItemDetailModalProps {
   valuationStatusText?: string;
   onPlaceBid?: (itemId: number, amount: string) => void;
   onMarkWon?: (itemId: number) => void;
+  onArchive?: (itemId: number, isArchived: boolean) => void;
   isBidding?: boolean;
   bidError?: string | null;
   bidSuccess?: string | null;
-  // New props for market data
   comparables?: any;
-  targetMargin?: string | number;
-  onMarginChange?: (val: string | number) => void;
-  onPersistMargin?: () => void;
   loadingComparables?: boolean;
+  targetMargin?: string | number;
+  onMarginChange?: (val: any) => void;
+  onPersistMargin?: () => void;
   userTimezone?: string;
 }
 
@@ -84,18 +104,20 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   bidError,
   bidSuccess,
   comparables,
+  loadingComparables,
   targetMargin,
   onMarginChange,
   onPersistMargin,
-  loadingComparables,
   userTimezone
 }) => {
   const [imageIndex, setImageIndex] = useState(0);
   const [bidAmount, setBidAmount] = useState<string>('');
 
   useEffect(() => {
-    setImageIndex(0);
-    setBidAmount('');
+    setTimeout(() => {
+      setImageIndex(0);
+      setBidAmount('');
+    }, 0);
   }, [item?.id]);
 
   if (!item) return null;
@@ -113,368 +135,371 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setImageIndex(prev => (prev < images.length - 1 ? prev + 1 : 0));
   };
 
+  const roi = item.computedRoi !== null && item.computedRoi !== undefined 
+    ? item.computedRoi 
+    : (item.valuation?.target_roi_pct ? item.valuation.target_roi_pct * 100 : null);
+
+  const auctionHouse = item.auction_house_key ? AUCTION_HOUSE_MAP[item.auction_house_key] : null;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <div className="item-detail-layout modern">
-        <div className="item-detail-image-panel-bg">
-          {currentImage ? (
-            <img
-              src={currentImage}
-              alt={item.title}
-              className="item-detail-bg-image"
-            />
-          ) : (
-            <div className="item-detail-no-image-bg">No Image Available</div>
-          )}
-        </div>
+      <div className="bg-background text-body-md antialiased overflow-y-auto max-h-[90vh] rounded-xl">
+        <main className="p-6 space-y-6">
+          {/* Summary Metrics */}
+          <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-surface-container-lowest rounded-xl flex items-center gap-4 p-4 shadow-soft border border-outline-variant/30">
+              <div className="w-10 h-10 bg-secondary-container/10 rounded-full flex items-center justify-center">
+                <DollarSign size={20} className="text-secondary opacity-70" />
+              </div>
+              <div>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Est. Value</p>
+                <p className="text-xl text-on-surface">${item.valuation?.est_market_value?.toFixed(0) || '---'}</p>
+              </div>
+            </div>
+            
+            <div className="bg-surface-container-lowest rounded-xl flex items-center gap-4 p-4 shadow-soft border border-outline-variant/30">
+              <div className="w-10 h-10 bg-surface-container-high rounded-full flex items-center justify-center">
+                <Target size={20} className="text-outline opacity-70" />
+              </div>
+              <div>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Max Bid</p>
+                <p className="text-xl text-on-surface">${item.valuation?.max_bid_for_target_roi?.toFixed(0) || '---'}</p>
+              </div>
+            </div>
 
-        <div className="item-detail-overlay-content">
-          <div className="item-detail-content-columns">
-            {/* Left Column: Metadata & Research */}
-            <div className="item-detail-col left">
-              <div className="item-detail-subtitle vertical">
-                <span className="item-pill vertical time-remaining" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <CalendarDays size={14}/> <CountdownTimer endTime={item.end_time || null} />
+            <div className="bg-surface-container-lowest rounded-xl flex items-center gap-4 p-4 shadow-soft border border-outline-variant/30">
+              <div className="w-10 h-10 bg-secondary-container/10 rounded-full flex items-center justify-center">
+                <Gavel size={20} className="text-secondary" />
+              </div>
+              <div>
+                <p className="text-[10px] text-secondary uppercase tracking-widest">Current Bid</p>
+                <p className="text-xl text-secondary">${item.current_bid?.toFixed(2) || '0.00'}</p>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-xl flex items-center gap-4 p-4 shadow-soft border border-outline-variant/30">
+              <div className="w-10 h-10 bg-status-winning/10 rounded-full flex items-center justify-center">
+                <TrendingUp size={20} className="text-status-profit opacity-70" />
+              </div>
+              <div>
+                <p className="text-[10px] text-status-profit uppercase tracking-widest">Projected ROI</p>
+                <p className="text-xl text-status-profit">
+                  {roi === Infinity ? '∞%' : (roi !== null ? `${Math.round(roi)}%` : '---')}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Urgent Header Bar */}
+          <section className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 shadow-soft flex items-center justify-between">
+            <div className="flex items-center gap-6 flex-1">
+              <div className="flex items-center gap-2">
+                <Timer size={18} className="text-error" />
+                <span className="text-[10px] text-on-surface-variant uppercase tracking-widest">Time Remaining</span>
+              </div>
+              <div className="flex-1 h-1 bg-outline-variant/30 rounded-full overflow-hidden">
+                <div className="h-full bg-error w-3/4 rounded-full"></div>
+              </div>
+              <div className="flex flex-col items-end">
+                <div className="text-headline-md text-error font-bold whitespace-nowrap">
+                  <CountdownTimer endTime={item.end_time || null} />
+                </div>
+                <span className="text-[9px] opacity-60 font-medium">{formatAuctionDate(item.end_time, userTimezone)}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Main Detail Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Product Info & Gallery */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl overflow-hidden shadow-soft">
+                <div className="aspect-video bg-surface-container-low relative group">
+                  {currentImage ? (
+                    <img className="w-full h-full object-cover" src={currentImage} alt={formatItemName(item)} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-outline">No Image Available</div>
+                  )}
+                  
+                  {images.length > 1 && (
+                    <>
+                      <button onClick={handlePrev} className="absolute left-2 top-1/2 -translate-y-1/2 p-1 bg-black/20 hover:bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ChevronLeft size={20} />
+                      </button>
+                      <button onClick={handleNext} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-black/20 hover:bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ChevronRight size={20} />
+                      </button>
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                        {images.map((_, idx) => (
+                          <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === imageIndex ? 'bg-white' : 'bg-white/40'}`} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-lg text-primary leading-tight">{formatItemName(item)}</h3>
+                    {auctionHouse && (
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${auctionHouse.className}`}>
+                        {auctionHouse.short}
+                      </span>
+                    )}
                   </div>
-                  <div style={{ fontSize: '10px', opacity: 0.8, marginLeft: '20px' }}>
-                    {formatAuctionDate(item.end_time, userTimezone)}
+                  <p className="text-on-surface-variant text-sm mb-4 leading-relaxed line-clamp-2">
+                    {item.category || 'Uncategorized Auction Item'} • Lot #{item.lot_number || 'N/A'}
+                  </p>
+                  
+                  <div>
+                    <p className="text-[10px] text-outline uppercase tracking-widest mb-2">Technical Tags</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {normalizeTags(item.tags).map((tag, idx) => (
+                        <span key={idx} className="bg-surface-container-low px-2 py-1 rounded text-[11px] text-on-surface-variant border border-outline-variant/20 whitespace-nowrap">
+                          {tag.value}
+                        </span>
+                      ))}
+                      {item.vin && <span className="bg-primary/5 px-2 py-1 rounded text-[11px] font-mono border border-primary/10">VIN: {item.vin}</span>}
+                    </div>
                   </div>
-                </span>
-                <span className="item-pill vertical lot-number">Lot #{item.lot_number || 'N/A'}</span>
-                {item.auction_house_key && (
-                  <span className={`source-badge ${AUCTION_HOUSE_MAP[item.auction_house_key]?.className || 'source-default'}`} style={{ borderRadius: '12px', padding: '10px 14px', fontSize: '0.85rem', width: '100%', textAlign: 'center' }}>
-                    {AUCTION_HOUSE_MAP[item.auction_house_key]?.name || 'Unknown House'}
-                  </span>
-                )}
-                {item.vin && (
-                  <span className="item-pill vertical vin mono">
-                    {item.vin}
-                  </span>
-                )}
-                {item.category && (
-                  <span className="item-pill vertical category" title={item.category}>
-                    <LayoutGrid size={14}/> <span className="truncate">{item.category}</span>
-                  </span>
-                )}
+                </div>
               </div>
 
-              {/* Margin Calculator Panel - Moved to Section 1 */}
-              {(viewContext === 'bidding' || viewContext === 'watchlist') && (
-                <div className="detail-section">
-                  <h3>Margin Calculator</h3>
-                  <div className="market-panel calculator sidebar">
-                    <div className="calc-row">
-                      <label>Target Margin (%)</label>
+              {/* Research Insights */}
+              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-5 shadow-soft">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-base text-primary">Research Insights</h4>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-secondary uppercase text-[10px] hover:underline flex items-center gap-1">
+                    <ExternalLink size={12} /> Full Auction
+                  </a>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-outline-variant/30 rounded-lg p-3 bg-surface-bright">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full bg-secondary-container/10 flex items-center justify-center">
+                        <Activity size={14} className="text-secondary" />
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant uppercase tracking-wider">Scarcity</span>
+                    </div>
+                    <p className="text-primary font-bold text-xs mb-0.5">
+                      {item.valuation?.sample_size ? (item.valuation.sample_size > 20 ? 'High Liquidity' : 'Low Volume') : 'N/A'}
+                    </p>
+                    <p className="text-on-surface-variant text-[10px] leading-tight">Based on {item.valuation?.sample_size || 0} active comps.</p>
+                  </div>
+                  
+                  <div className="border border-outline-variant/30 rounded-lg p-3 bg-surface-bright">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full bg-tertiary-fixed/30 flex items-center justify-center">
+                        <CheckCircle2 size={14} className="text-tertiary" />
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant uppercase tracking-wider">Analysis</span>
+                    </div>
+                    <p className="text-primary font-bold text-xs mb-0.5">AI Enriched</p>
+                    <p className="text-on-surface-variant text-[10px] leading-tight">Gemma 2B categorization confirmed.</p>
+                  </div>
+
+                  <div className="border border-outline-variant/30 rounded-lg p-3 bg-surface-bright">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center">
+                        <Gauge size={14} className="text-primary" />
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant uppercase tracking-wider">Query</span>
+                    </div>
+                    <p className="text-primary font-bold text-xs mb-0.5 truncate" title={item.valuation?.search_query}>
+                      {item.valuation?.search_query || 'N/A'}
+                    </p>
+                    <p className="text-on-surface-variant text-[10px] leading-tight">Search terms used for valuation.</p>
+                  </div>
+
+                  <div className="border border-outline-variant/30 rounded-lg p-3 bg-surface-bright">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-full bg-error-container/50 flex items-center justify-center">
+                        <Wrench size={14} className="text-error" />
+                      </div>
+                      <span className="text-[9px] text-on-surface-variant uppercase tracking-wider">Status</span>
+                    </div>
+                    <p className="text-primary font-bold text-xs mb-0.5">
+                      {item.is_archived ? 'Archived' : (item.is_watched ? 'Watching' : 'Active')}
+                    </p>
+                    <p className="text-on-surface-variant text-[10px] leading-tight">Currently in your {item.is_archived ? 'history' : 'pipeline'}.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Market Data & Expenses */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Market Comparison Table */}
+              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl overflow-hidden shadow-soft">
+                <div className="p-4 border-b border-outline-variant/30 flex justify-between items-center bg-surface-bright">
+                  <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Market Comparison (Active Comps)</p>
+                  {loadingComparables ? (
+                    <Loader2 size={12} className="animate-spin text-secondary" />
+                  ) : (
+                    <span className="text-[10px] text-outline">Trimmed Median Analysis</span>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-container-low/30 border-b border-outline-variant/30">
+                        <th className="px-5 py-3 text-[9px] text-outline uppercase tracking-wider">Competitor Listing</th>
+                        <th className="px-5 py-3 text-[9px] text-secondary uppercase tracking-wider text-right">Price</th>
+                        <th className="px-5 py-3 text-[9px] text-outline uppercase tracking-wider">Cond.</th>
+                        <th className="px-5 py-3 text-[9px] text-outline uppercase tracking-wider text-right">Link</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/20">
+                      {comparables?.sample_listings?.slice(0, 4).map((listing: any, i: number) => (
+                        <tr key={i} className="hover:bg-surface-container-low/50 transition-colors">
+                          <td className="px-5 py-3 text-xs text-primary truncate max-w-[200px]">{listing.title}</td>
+                          <td className="px-5 py-3 text-xs text-primary text-right font-bold">${listing.price}</td>
+                          <td className="px-5 py-3 text-[10px] text-on-surface-variant uppercase">{listing.condition || 'N/A'}</td>
+                          <td className="px-5 py-3 text-right">
+                            <a href={listing.url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:opacity-70">
+                              <ExternalLink size={12} />
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {(!comparables?.sample_listings || comparables.sample_listings.length === 0) && (
+                        <tr>
+                          <td colSpan={4} className="px-5 py-8 text-center text-xs text-outline italic">
+                            {loadingComparables ? 'Syncing market data...' : 'No direct comparables found in recent scrape.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Expense Breakdown */}
+              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-5 shadow-soft">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-base text-primary">Expense Estimation</h4>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-on-surface-variant">Marketplace Fees (13.5%)</span>
+                    <span className="font-bold text-primary">${((item.valuation?.est_market_value || 0) * 0.135).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-on-surface-variant">Shipping & Fulfillment</span>
+                    <span className="font-bold text-primary">$45.00</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-on-surface-variant">Processing Buffer</span>
+                    <span className="font-bold text-primary">$15.00</span>
+                  </div>
+                  <div className="pt-3 border-t border-outline-variant/30 flex justify-between items-center">
+                    <span className="text-[10px] text-on-surface-variant uppercase tracking-widest">Est. Operating Cost</span>
+                    <span className="text-lg text-error">
+                      ${(((item.valuation?.est_market_value || 0) * 0.135) + 60).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Margin Calculator (Visible in specific contexts) */}
+              {(viewContext === 'bidding' || viewContext === 'watchlist') && onMarginChange && (
+                <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-5 shadow-soft">
+                  <h4 className="text-base text-primary mb-4">Margin Calculator</h4>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="text-[9px] text-outline uppercase block mb-1">Target Margin (%)</label>
                       <input 
                         type="number" 
                         value={targetMargin ?? (item.valuation?.target_roi_pct ? item.valuation.target_roi_pct * 100 : 20)}
-                        onChange={(e) => onMarginChange?.(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                        onBlur={() => onPersistMargin?.()}
-                        onKeyDown={(e) => e.key === 'Enter' && onPersistMargin?.()}
-                        className="calc-input"
+                        onChange={(e) => onMarginChange(e.target.value)}
+                        onBlur={() => onPersistMargin && onPersistMargin()}
+                        onKeyDown={(e) => e.key === 'Enter' && onPersistMargin && onPersistMargin()}
+                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-secondary outline-none"
                       />
                     </div>
-                    <div className="calc-result">
-                      <span className="result-label">Max Recommended Bid</span>
-                      <span className="result-value small">${item.valuation?.max_bid_for_target_roi.toFixed(2)}</span>
+                    <div className="flex-1">
+                      <label className="text-[9px] text-outline uppercase block mb-1">Max Recommended Bid</label>
+                      <p className="text-lg font-bold text-emerald-600">${item.valuation?.max_bid_for_target_roi?.toFixed(2) || '---'}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {viewContext === 'vehicles' && (
-                <div className="detail-section">
-                  <h3>Vehicle Specs</h3>
-                  <div className="detail-grid">
-                    {item.vehicle_year && (
-                      <div className="detail-item">
-                        <span className="label">Year</span>
-                        <span className="value">{item.vehicle_year}</span>
-                      </div>
-                    )}
-                    {item.vehicle_make && (
-                      <div className="detail-item">
-                        <span className="label">Make</span>
-                        <span className="value">{item.vehicle_make}</span>
-                      </div>
-                    )}
-                    {item.vehicle_model && (
-                      <div className="detail-item">
-                        <span className="label">Model</span>
-                        <span className="value">{item.vehicle_model}</span>
-                      </div>
-                    )}
-                    {item.vehicle_trim && (
-                      <div className="detail-item">
-                        <span className="label">Trim</span>
-                        <span className="value">{item.vehicle_trim}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {item.valuation && (
-                <div className="detail-section">
-                  <h3>Research Info</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item-custom">
-                      <div className="research-query-header">Search Query</div>
-                      <div className="research-query-term">{item.valuation.search_query}</div>
-                    </div>
-                    <div className="detail-item">
-                      <span className="label">Sample Size</span>
-                      <span className="value">{item.valuation.sample_size || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="item-detail-spacer"></div>
-
-              {item.tags && normalizeTags(item.tags).length > 0 && (
-                <div className="detail-section no-header">
-                  <div className="tags-pill-container">
-                    {normalizeTags(item.tags).map((tag, idx) => (
-                      <span key={`modal-tag-${idx}`} className={`modern-tag ${tag.key ? 'structured' : ''}`}>
-                        {tag.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Center Column: High-Res Image & Title Overlay */}
-            <div className="item-detail-col center">
-              <div className="item-detail-title-card">
-                <h2>{item.title}</h2>
-              </div>
-              <div className="gallery-container">
-                {currentImage ? (
-                  <img
-                    src={currentImage}
-                    alt={item.title}
-                    className="item-detail-center-image"
-                  />
-                ) : (
-                  <div className="item-detail-no-image-bg">No Image Available</div>
-                )}
-                {images.length > 1 && (
-                  <>
-                    <button className="gallery-nav-btn left" onClick={handlePrev}><ChevronLeft size={24} /></button>
-                    <button className="gallery-nav-btn right" onClick={handleNext}><ChevronRight size={24} /></button>
-                    <div className="gallery-indicators">
-                      {images.map((_, idx) => (
-                        <span key={idx} className={`gallery-dot ${idx === imageIndex ? 'active' : ''}`} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column: Dynamic Contextual Content */}
-            <div className="item-detail-col right">
-              {/* Current Bid Tile */}
-              <div className="item-detail-kpi-tile bid">
-                <div className="kpi-label">Current Bid</div>
-                <div className="kpi-value">${item.current_bid?.toFixed(2) || '0.00'}</div>
-              </div>
-
-              {/* Bidding & Value Grid */}
-              <div className="detail-section">
-                <h3>Bidding & Value</h3>
-                <div className="detail-grid">
-                  {viewContext === 'bidding' && item.user_bids && (
-                    <>
-                      <div className="detail-item">
-                        <span className="label">Your Bid</span>
-                        <span className="value font-semibold">${item.user_bids.user_bid_amount?.toFixed(2)}</span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="label">Proxy Bid Value</span>
-                        <span className="value font-semibold">${item.user_bids.user_proxy_bid?.toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
-                  {item.valuation && (
-                    <>
-                      <div className="detail-item">
-                        <span className="label">Est. Value</span>
-                        <span className="value text-emerald-500">${item.valuation.est_market_value?.toFixed(2)}</span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="label">Max Bid</span>
-                        <span className="value text-blue-500">${item.valuation.max_bid_for_target_roi?.toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
-                  {viewContext === 'bidding' && item.landedCost !== undefined && (
-                    <div className="detail-item">
-                      <span className="label">Landed Cost</span>
-                      <span className="value text-gray-300">${item.landedCost.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions Section */}
-              <div className="detail-section no-header">
+              {/* Local Actions (Re-valuate, Archive, Mark Won) */}
+              <div className="flex flex-wrap gap-3">
                 {viewContext === 'research' && (
-                  <div className="item-detail-bid-section-modern">
-                    <div className="bid-input-group">
-                      <span className="currency-symbol">$</span>
-                      <input 
-                        type="number" 
-                        value={bidAmount}
-                        onChange={(e) => setBidAmount(e.target.value)}
-                        className="modern-bid-input"
-                        placeholder={`Min: $${((item.current_bid || 0) + 1).toFixed(0)}`}
-                        disabled={isBidding}
-                      />
-                      <button 
-                        className="modern-bid-btn" 
-                        onClick={() => onPlaceBid && onPlaceBid(item.id, bidAmount)} 
-                        disabled={isBidding || !bidAmount}
-                      >
-                        {isBidding ? <Loader2 size={16} className="spinning" /> : 'Bid'}
-                      </button>
-                    </div>
-                    {bidError && <div className="bid-msg error">{bidError}</div>}
-                    {bidSuccess && <div className="bid-msg success">{bidSuccess}</div>}
-                  </div>
+                   <button 
+                    onClick={() => onValuate && onValuate(item.id)}
+                    className="flex-1 py-3 bg-surface-container-low hover:bg-surface-container-high text-on-surface border border-outline-variant/30 rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all disabled:opacity-50"
+                    disabled={isValuating}
+                  >
+                    {isValuating ? <Loader2 size={14} className="animate-spin inline mr-2" /> : <TrendingUp size={14} className="inline mr-2" />}
+                    {isValuating ? (valuationStatusText || 'Valuating...') : 'Re-Valuate AI'}
+                  </button>
+                )}
+                
+                {viewContext === 'bidding' && (
+                  <button
+                    className="flex-1 py-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all"
+                    onClick={() => onMarkWon && onMarkWon(item.id)}
+                  >
+                    Mark as Won
+                  </button>
                 )}
 
-                {(viewContext === 'watchlist' || viewContext === 'vehicles' || viewContext === 'bidding') && (
-                  <div className="action-column">
-                    {viewContext === 'bidding' && item.user_bids?.user_bid_status === 'won' && (
-                      <div className="bg-green-500/20 text-green-400 p-2 rounded text-center text-sm font-medium mb-3 border border-green-500/30">
-                        🏆 Lot Won
-                      </div>
-                    )}
-                    {viewContext === 'bidding' && item.user_bids?.user_bid_status !== 'won' && (
-                      <>
-                        <button
-                          className="glass-blue-btn-small"
-                          style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.3)' }}
-                          onClick={() => onMarkWon && onMarkWon(item.id)}
-                        >
-                          Mark as Won
-                        </button>
-                        {(['lost', 'loss', 'outbid', 'outbid_near', 'reserve_not_met'].includes(item.user_bids?.user_bid_status || '') || item.is_archived) && (
-                          <button
-                            className="glass-blue-btn-small"
-                            style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: item.is_archived ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: item.is_archived ? '#10b981' : '#ef4444', borderColor: item.is_archived ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)' }}
-                            onClick={() => onArchive && onArchive(item.id, !item.is_archived)}
-                          >
-                            {item.is_archived ? <RotateCcw size={16} className="mr-2" /> : <Archive size={16} className="mr-2" />}
-                            {item.is_archived ? 'Unarchive' : 'Archive'}
-                          </button>
-                        )}
-                      </>
-                    )}                    {isValuating ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', marginBottom: '12px' }}>
-                        <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                        <span>{valuationStatusText || "Loading..."}</span>
-                      </div>
-                    ) : (
-                      <button 
-                        className="glass-blue-btn-small"
-                        style={{ marginBottom: '12px', width: '100%', justifyContent: 'center', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }}
-                        onClick={() => onValuate && onValuate(item.id)}
-                      >
-                        Re-Valuate
-                      </button>
-                    )}
-                  </div>
+                {onArchive && (
+                  <button 
+                    onClick={() => onArchive(item.id, !item.is_archived)}
+                    className="px-6 py-3 bg-surface-container-low hover:bg-surface-container-high text-on-surface border border-outline-variant/30 rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all"
+                    title={item.is_archived ? 'Unarchive' : 'Archive'}
+                  >
+                    {item.is_archived ? <RotateCcw size={14} /> : <Package size={14} />}
+                  </button>
                 )}
-
-                <div className="action-row" style={{ marginTop: '12px' }}>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="glass-blue-btn-small" style={{ width: '100%', justifyContent: 'center' }}>
-                    View Full Auction <ExternalLink size={14} />
-                  </a>
-                </div>
               </div>
+            </div>
+          </div>
+        </main>
 
-              {/* ROI Tile */}
-              {item.valuation && (
-                <div className="item-detail-kpi-tile roi">
-                  <div className="kpi-label">ROI</div>
-                  <div className={`kpi-value ${viewContext === 'bidding' && item.computedRoi && item.computedRoi > 20 ? 'high' : ''}`}>
-                    {viewContext === 'bidding' && item.computedRoi !== undefined && item.computedRoi !== null
-                      ? (item.computedRoi === Infinity ? '∞%' : `${Math.round(item.computedRoi)}%`)
-                      : (item.valuation.target_roi_pct ? `${Math.round(item.valuation.target_roi_pct)}%` : '--')
-                    }
-                  </div>
-                </div>
-              )}
+        {/* Persistent Footer Action Bar */}
+        <footer className="sticky bottom-0 bg-surface-container/80  border-t border-outline-variant/30 p-5 flex flex-col md:flex-row items-center justify-between gap-4 z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-8 w-full md:w-auto">
+            <div className="space-y-1">
+              <span className="text-[9px] text-outline uppercase tracking-widest">Your Next Bid</span>
+              <div className="flex items-center gap-2">
+                <span className="text-outline font-bold">$</span>
+                <input 
+                  type="number"
+                  className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-3 py-1.5 w-32 text-lg text-primary focus:ring-2 focus:ring-secondary outline-none transition-all"
+                  value={bidAmount}
+                  placeholder={((item.current_bid || 0) + 1).toString()}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  disabled={isBidding}
+                />
+              </div>
+            </div>
+            <div className="hidden md:block h-10 w-px bg-outline-variant/30"></div>
+            <div className="space-y-0.5">
+              <span className="text-[9px] text-outline uppercase tracking-widest">Potential Profit</span>
+              <p className="text-lg text-secondary">
+                {item.valuation && bidAmount ? `$${(item.valuation.est_market_value - Number(bidAmount)).toFixed(2)}` : '---'}
+              </p>
             </div>
           </div>
 
-          {/* New Market Analysis Section */}
-          {(viewContext === 'bidding' || viewContext === 'watchlist') && (
-            <div className="item-detail-market-section full-width">
-              {loadingComparables ? (
-                <div className="market-loading">
-                  <Loader2 size={24} className="spinning" />
-                  <span>Analyzing market listings...</span>
-                </div>
-              ) : (
-                <div className="market-panel listings full-width">
-                  <div className="listings-header">
-                    <h3>Active Market Listings</h3>
-                    {comparables && (
-                      <div className="market-stats">
-                        <span>AVG: <strong>${comparables.avg_asking_price?.toFixed(2)}</strong></span>
-                        <span className="divider">|</span>
-                        <span>RANGE: <strong>${comparables.price_range_low?.toFixed(2)} - ${comparables.price_range_high?.toFixed(2)}</strong></span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="listings-table-container">
-                    <table className="market-table">
-                      <thead>
-                        <tr>
-                          <th>Title</th>
-                          <th>Price</th>
-                          <th>Condition</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {comparables?.sample_listings?.map((listing: any, i: number) => (
-                          <tr key={i} onClick={() => window.open(listing.url, '_blank')} className="clickable-row">
-                            <td className="listing-title" title={listing.title}>{listing.title}</td>
-                            <td className="listing-price font-mono">${listing.price}</td>
-                            <td className="listing-condition">{listing.condition}</td>
-                            <td className="listing-action">
-                              <ExternalLink size={14} className="text-blue-500" />
-                            </td>
-                          </tr>
-                        ))}
-                        {(!comparables?.sample_listings || comparables.sample_listings.length === 0) && (
-                          <tr>
-                            <td colSpan={4} className="no-data">No comparable listings found.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          <div className="flex flex-col items-end gap-1 w-full md:w-auto">
+            <button 
+              className="w-full md:w-auto px-12 py-3 bg-primary text-on-primary rounded-lg text-[11px] uppercase tracking-widest font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+              onClick={() => onPlaceBid && onPlaceBid(item.id, bidAmount)}
+              disabled={isBidding || !bidAmount}
+            >
+              {isBidding ? <Loader2 size={16} className="animate-spin" /> : 'Place Quick Bid'}
+            </button>
+            {bidError && <span className="text-[10px] text-error font-medium">{bidError}</span>}
+            {bidSuccess && <span className="text-[10px] text-status-profit font-medium">{bidSuccess}</span>}
+          </div>
+        </footer>
       </div>
     </Modal>
-  );
-};
-
-export default ItemDetailModal;
-Modal>
   );
 };
 

@@ -124,7 +124,7 @@ const FulfillmentPane: React.FC<FulfillmentPaneProps> = ({ orders, onShip }) => 
 
       {/* Return Modal (Overlay) */}
       {isReturning && selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-8">
+        <div className="fixed inset-0 z-50 bg-black/80  flex items-center justify-center p-8">
           <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
             <div className="p-6 border-b border-white/5 flex justify-between items-center">
               <h3 className="text-2xl font-bold text-white flex items-center gap-3">
