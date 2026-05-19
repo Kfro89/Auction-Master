@@ -12,6 +12,7 @@ This directory contains the core documentation for the Auction Arbitrage project
 - **[progress_report.md](./progress_report.md)**: Current development status, completed milestones, and immediate handoff context.
 
 ## 🛠 Technical Manifests
+- **[srp.md](./srp.md)**: Details the Single Responsibility Principle (SRP) boundaries of all backend services, their inputs/outputs, and their relationship matrix.
 - **[api_manifest.md](./api_manifest.md)**: **CRITICAL.** Consolidated research on eBay Browse API, Public Surplus API, and reverse-engineered GraphQL/Apollo structures for Whitley and Roller Auction. Includes fee structures and condition mapping enums.
 - **[superpowers/specs/2026-05-08-item-hierarchy.md](./superpowers/specs/2026-05-08-item-hierarchy.md)**: Defines the standardized Item Hierarchy mapping for cross-referencing auction lots to eBay categories.
 
@@ -35,6 +36,11 @@ Designs and implementation plans for the comprehensive web interface, staging wo
 - **[superpowers/plans/2026-05-08-work-queue-implementation.md](./superpowers/plans/2026-05-08-work-queue-implementation.md)**: Phase 5 Plan.
 - **[superpowers/plans/2026-05-08-store-analytics-implementation.md](./superpowers/plans/2026-05-08-store-analytics-implementation.md)**: Phase 6 Plan.
 - **[superpowers/plans/2026-05-08-polish-readiness.md](./superpowers/plans/2026-05-08-polish-readiness.md)**: Phase 7 Plan.
+
+## 🎨 Frontend Rebuild on shadcn/ui (May 2026 — Current)
+The "Glass Master" frontend was retired in favor of shadcn/ui on Tailwind v4. **The May 2026 documents below supersede the Phase 4–7 frontend specs above** for any question about the *current* UI.
+- **[2026-05-19-frontend-shadcn-rebuild.md](./2026-05-19-frontend-shadcn-rebuild.md)**: State of the rebuilt frontend — routes, source layout, cross-cutting features, deployment notes, verification checklist.
+- **[/DESIGN.md](../DESIGN.md)**: Design system requirements — tokens, motion rules, dependencies, anti-patterns. **Read this before touching any UI component.**
 
 ## 📱 Mobile Application
 Documentation specifically covering the Flutter mobile application counterpart to the ERP Suite:
