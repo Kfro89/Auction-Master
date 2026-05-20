@@ -7,12 +7,13 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { motion } from "framer-motion"
-import { MoreHorizontal, EyeOff, Package, BarChart2 } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { MoreHorizontal, EyeOff, Package, BarChart2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +27,7 @@ import { Money } from "@/components/common/Money"
 import { Percent } from "@/components/common/Percent"
 import { EmptyState } from "@/components/common/EmptyState"
 import { CountdownBadge } from "@/components/research/CountdownBadge"
-import { useHideBid, useClaimBid } from "@/hooks/useBids"
+import { useHideBid, useClaimBid, useBulkHideBids } from "@/hooks/useBids"
 import { computeProjectedProfit, computeRoi, truncateTitle } from "@/lib/format"
 import type { BidItem } from "@/lib/types"
 
@@ -42,13 +43,46 @@ export function BidsTableSkeleton() {
 
 export function BidsTable({ items }: { items: BidItem[] }) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const [rowSelection, setRowSelection] = useState({})
   const [comparableItem, setComparableItem] = useState<BidItem | null>(null)
 
   const hideBid = useHideBid()
   const claimBid = useClaimBid()
+  const bulkHide = useBulkHideBids()
+
+  const handleBulkHide = () => {
+    const ids = table.getSelectedRowModel().rows.map(r => r.original.id)
+    if (ids.length === 0) return
+    bulkHide.mutate({ ids, is_hidden: true }, {
+      onSuccess: () => {
+        toast.success(`Hidden ${ids.length} items`)
+        setRowSelection({})
+      },
+      onError: () => toast.error("Bulk hide failed")
+    })
+  }
 
   const columns = useMemo<ColumnDef<BidItem>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
       {
         id: "image",
         header: "",
@@ -65,14 +99,15 @@ export function BidsTable({ items }: { items: BidItem[] }) {
         header: "Item",
         cell: ({ row }) => {
           const i = row.original
+          const displayName = i.product_name || i.title
           return (
             <div className="min-w-0">
               <p className="text-sm font-medium leading-tight line-clamp-2">
                 {i.url ? (
                   <a href={i.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
-                    {truncateTitle(i.title)}
+                    {truncateTitle(displayName)}
                   </a>
-                ) : truncateTitle(i.title)}
+                ) : truncateTitle(displayName)}
               </p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {i.auction_house_name && <Badge variant="secondary" className="text-xs px-1.5 py-0">{i.auction_house_name}</Badge>}
@@ -110,8 +145,14 @@ export function BidsTable({ items }: { items: BidItem[] }) {
         cell: ({ row }) => <CountdownBadge endTime={row.original.end_time} />,
       },
       {
+        id: "est_value",
+        header: "Est. Value",
+        accessorFn: (row) => row.valuation?.est_market_value,
+        cell: ({ row }) => <Money value={row.original.valuation?.est_market_value} />,
+      },
+      {
         id: "profit",
-        header: "Profit",
+        header: "Est. Profit",
         accessorFn: (row) => computeProjectedProfit(row.valuation?.est_market_value, row.current_bid_amount),
         cell: ({ row }) => {
           const profit = computeProjectedProfit(row.original.valuation?.est_market_value, row.original.current_bid_amount)
@@ -121,7 +162,7 @@ export function BidsTable({ items }: { items: BidItem[] }) {
       },
       {
         id: "roi",
-        header: "ROI",
+        header: "Est. ROI",
         accessorFn: (row) => computeRoi(row.valuation?.est_market_value, row.current_bid_amount),
         cell: ({ row }) => (
           <Percent
@@ -181,47 +222,66 @@ export function BidsTable({ items }: { items: BidItem[] }) {
   const table = useReactTable({
     data: items,
     columns,
-    state: { sorting },
+    state: {
+      sorting,
+      rowSelection,
+    },
+    enableRowSelection: true,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
 
+  const selectedCount = Object.keys(rowSelection).length
+
   return (
-    <>
-      <div className="rounded-md border">
+    <div className="space-y-4 relative">
+      <div className="rounded-md border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
                   <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                   </TableHead>
                 ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length ? (
+            {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row, i) => (
                 <motion.tr
                   key={row.id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.02, duration: 0.12 }}
+                  data-state={row.getIsSelected() && "selected"}
                   className="border-b transition-colors hover:bg-muted/50"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="py-2">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </motion.tr>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length}>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   <EmptyState title="No active bids" description="Bids you place will appear here" />
                 </TableCell>
               </TableRow>
@@ -230,7 +290,45 @@ export function BidsTable({ items }: { items: BidItem[] }) {
         </Table>
       </div>
 
-      <ComparablesDrawer item={comparableItem} onClose={() => setComparableItem(null)} />
-    </>
+      <AnimatePresence>
+        {selectedCount > 0 && (
+          <motion.div
+            initial={{ y: 100, x: "-50%", opacity: 0 }}
+            animate={{ y: 0, x: "-50%", opacity: 1 }}
+            exit={{ y: 100, x: "-50%", opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 border border-white/10"
+          >
+            <span className="text-sm font-medium border-r border-white/20 pr-6">
+              {selectedCount} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 text-white hover:bg-white/10"
+                onClick={handleBulkHide}
+              >
+                <EyeOff className="h-4 w-4 mr-2" />
+                Hide
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 text-white hover:bg-white/10"
+                onClick={() => setRowSelection({})}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Clear
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <ComparablesDrawer
+        item={comparableItem}
+        onClose={() => setComparableItem(null)}
+      />
+    </div>
   )
 }

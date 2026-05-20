@@ -1,5 +1,6 @@
 import { useBids } from "@/hooks/useBids"
 import { BidsTable, BidsTableSkeleton } from "@/components/bidding/BidsTable"
+import { BiddingDashboard } from "@/components/bidding/BiddingDashboard"
 import { EmptyState } from "@/components/common/EmptyState"
 
 export function BiddingPage() {
@@ -12,10 +13,12 @@ export function BiddingPage() {
     </div>
   )
 
-  const active = data?.filter((i) => !i.is_hidden_from_active) ?? []
+  const items = data?.pages.flat() || []
+  const active = items.filter((i) => !i.is_hidden_from_active)
 
   return (
     <div className="p-6">
+      <BiddingDashboard items={items} />
       <BidsTable items={active} />
     </div>
   )
