@@ -1,8 +1,9 @@
 import asyncio
-from app.scrapers.auctioneer_software import AuctioneerSoftwareScraper
+from app.scrapers.roller_auction import RollerAuctionScraper
 
-async def main():
-    scraper = AuctioneerSoftwareScraper(base_url="https://bid.rollerauction.com", website_key="rol")
+async def test_bmw():
+    scraper = RollerAuctionScraper(base_url="https://bid.rollerauction.com", website_key="rol")
+
     auctions = await scraper.discover_active_auctions()
     if auctions:
         for auction in auctions:

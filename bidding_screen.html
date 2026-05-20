@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Active Bids - FlipControl Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"primary-container": "#1b1b1b", "on-error": "#ffffff", "surface-container-highest": "#e2e2e2", "on-secondary-fixed": "#00174b", "on-tertiary-container": "#848484", "surface-bright": "#f9f9f9", "on-primary-fixed": "#1b1b1b", "surface-container": "#eeeeee", "on-tertiary-fixed-variant": "#474747", "on-primary-container": "#848484", "tertiary-fixed": "#e2e2e2", "secondary-container": "#346cef", "on-secondary": "#ffffff", "surface-variant": "#e2e2e2", "on-surface-variant": "#4c4546", "on-surface": "#1b1b1b", tertiary: "#000000", "surface-dim": "#dadada", secondary: "#0051d5", "surface-container-low": "#f3f3f3", "error-container": "#ffdad6", "surface-container-high": "#e8e8e8", "on-primary": "#ffffff", "on-tertiary": "#ffffff", "secondary-fixed": "#dbe1ff", "surface-container-lowest": "#ffffff", "inverse-primary": "#c6c6c6", "on-secondary-fixed-variant": "#003ea7", "status-outbid": "#dc2626", "primary-fixed": "#e2e2e2", "surface-tint": "#5e5e5e", error: "#ba1a1a", "on-primary-fixed-variant": "#474747", "on-background": "#1b1b1b", "outline-variant": "#cfc4c5", background: "#f9f9f9", "on-error-container": "#93000a", "on-tertiary-fixed": "#1b1b1b", "secondary-fixed-dim": "#b4c5ff", "tertiary-fixed-dim": "#c6c6c6", "primary-fixed-dim": "#c6c6c6", outline: "#7e7576", surface: "#f9f9f9", primary: "#000000", "inverse-on-surface": "#f1f1f1", "on-secondary-container": "#fefcff", "inverse-surface": "#303030", "tertiary-container": "#1b1b1b", "status-winning": "#059669"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}, spacing: {"stack-sm": "0.5rem", gutter: "1.5rem", "stack-lg": "1.5rem", "stack-xs": "0.25rem", "stack-md": "1rem", "sidebar-width": "256px", "container-margin": "2rem"}, fontFamily: {"label-caps": ["Inter"], "stat-xl": ["Inter"], "body-md": ["Inter"], "body-sm": ["Inter"], "table-data": ["Inter"], "headline-md": ["Inter"], "display-lg": ["Inter"], headline: ["Inter"], display: ["Inter"], body: ["Inter"], label: ["Inter"]}, fontSize: {"label-caps": ["11px", {lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "700"}], "stat-xl": ["28px", {lineHeight: "34px", letterSpacing: "-0.01em", fontWeight: "600"}], "body-md": ["14px", {lineHeight: "20px", fontWeight: "400"}], "body-sm": ["13px", {lineHeight: "18px", fontWeight: "400"}], "table-data": ["13px", {lineHeight: "16px", fontWeight: "500"}], "headline-md": ["18px", {lineHeight: "24px", fontWeight: "600"}], "display-lg": ["32px", {lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700"}]}}}};</script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel { 
+            @apply bg-white/85 backdrop-blur-xl border border-white/40 shadow-[0_8px_32px_0_rgba(31,38,135,0.1)]; 
+        }
+        .dark-glass-panel { 
+            @apply bg-slate-950/80 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]; 
+        }
+        .winning-pill { @apply bg-status-winning text-white font-bold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider; }
+        .outbid-pill { @apply bg-status-outbid text-white font-bold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider; }
+        .data-row:hover { @apply bg-white/40 transition-colors duration-200; }
+    </style></head>
+<body class="bg-[#F0F2F5] text-on-background font-body-md min-h-screen flex">
+<!-- Overlay Navigation (Dark Glassmorphic Sidebar) -->
+<aside class="fixed left-0 top-0 bottom-0 w-20 hover:w-64 group z-[100] bg-slate-950/80 backdrop-blur-2xl flex flex-col transition-all duration-300 overflow-hidden shadow-[4px_0_24px_rgba(0,0,0,0.15)] border-r border-white/5">
+<div class="py-6 px-4 flex flex-col h-full w-64">
+<div class="flex items-center gap-4 mb-10 px-1">
+<div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-slate-950" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<span class="font-headline-md text-white font-bold tracking-tight whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">FlipControl</span>
+</div>
+<nav class="flex flex-col gap-2 flex-1">
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">dashboard</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Dashboard</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl bg-white/10 text-white border border-white/20 shadow-sm transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0" style="font-variation-settings: 'FILL' 1;">gavel</span>
+<span class="font-body-md font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Active Bids</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">visibility</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Watchlist</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">assignment_turned_in</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Completed</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">query_stats</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Market Research</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">description</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Reports</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-2 pt-6 border-t border-white/10">
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">help</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Help Center</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-3 rounded-xl text-red-400 hover:bg-red-400/10 transition-all w-full" href="#">
+<span class="material-symbols-outlined shrink-0">logout</span>
+<span class="font-body-md font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">Sign Out</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-20 p-6 min-h-screen transition-all duration-300">
+<!-- Top Navigation -->
+<header class="flex justify-between items-center mb-8 bg-transparent">
+<h1 class="font-display-lg text-display-lg font-bold text-primary">Active Bids</h1>
+<div class="flex items-center gap-stack-md">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="bg-white/50 backdrop-blur-sm border border-white/60 rounded-lg pl-10 pr-4 py-2 text-table-data focus:ring-2 focus:ring-secondary outline-none w-72 transition-all" placeholder="Search inventory..." type="text"/>
+</div>
+<button class="p-2 hover:bg-white/50 rounded-full transition-colors relative">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-status-outbid rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 pl-2 ml-2 border-l border-black/10">
+<div class="w-9 h-9 rounded-full bg-secondary-fixed flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+<img alt="User profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDnnrjJSSAJZFn_l6bwLgDWaam9IEdgHPMz-WCXgm62Q1dObzcHjeAPzghr0GCbrCSgLOE2LLVDo6GQohculKVeIqh54ifNkME_FupWpA4jYMNM8IrTrhVlBulGA8iD4nLQPLtBVN2oRyhTSN2GN_gwmYJBUYnUHOQ3VRTQPHV2gcbtg5TWXpB8Q0IADm7TNf4K1kENsEJEAbNge75rN5pfQcaArprGDJYRTjElkObbta-4nOGV1P1GWtk5-jjRYPGJBhZL9UL5cwA"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Market Insights Bar -->
+<section class="mb-8">
+<div class="flex flex-col lg:flex-row gap-6 items-stretch">
+<!-- Primary Metrics Area -->
+<div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="bg-primary-container border border-white/10 p-6 rounded-2xl flex flex-col justify-center gap-2 shadow-lg relative overflow-hidden">
+<div class="absolute -right-4 -bottom-4 opacity-10">
+<span class="material-symbols-outlined !text-[120px] text-on-primary">payments</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-primary-container uppercase tracking-[0.1em]">Potential Profit</p>
+<p class="font-stat-xl text-4xl lg:text-5xl text-on-primary">$7,603.50</p>
+<div class="flex items-center gap-1 text-status-winning">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span class="text-xs font-bold">High Yield</span>
+</div>
+</div>
+<div class="glass-panel p-6 rounded-2xl flex flex-col justify-center gap-2">
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-[0.1em]">Avg. Potential ROI</p>
+<p class="font-stat-xl text-4xl lg:text-5xl text-on-surface">142%</p>
+<div class="flex items-center gap-1 text-secondary">
+<span class="material-symbols-outlined text-sm">analytics</span>
+<span class="text-xs font-bold">Above Market Avg</span>
+</div>
+</div>
+</div>
+<!-- Secondary Metrics Grid -->
+<div class="flex flex-col gap-6 lg:w-1/3">
+<div class="grid grid-cols-1 gap-6">
+<!-- Max Exposure -->
+<div class="glass-panel px-6 py-4 rounded-2xl flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary-container/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">account_balance_wallet</span>
+</div>
+<div>
+<p class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider">Max Exposure</p>
+<p class="font-headline-md text-on-surface">$4,796.50</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider">Est. Resale</p>
+<p class="text-body-sm font-bold text-on-surface">$12.4k</p>
+</div>
+</div>
+<!-- Bidding Status Donut -->
+<div class="glass-panel px-6 py-4 rounded-2xl flex items-center gap-6">
+<div class="relative w-16 h-16">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 36 36">
+<circle class="text-black/5" cx="18" cy="18" fill="transparent" r="16" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-status-winning" cx="18" cy="18" fill="transparent" r="16" stroke="currentColor" stroke-dasharray="75 100" stroke-width="4"></circle>
+<circle class="text-status-outbid" cx="18" cy="18" fill="transparent" r="16" stroke="currentColor" stroke-dasharray="25 100" stroke-dashoffset="-75" stroke-width="4"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-sm font-bold">4</span>
+<span class="text-[8px] uppercase font-bold text-on-surface-variant">Active</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-x-4 gap-y-1 flex-grow">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-status-winning"></span>
+<span class="text-body-sm text-on-surface font-medium">3 Win</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-status-outbid"></span>
+<span class="text-body-sm text-on-surface font-medium">1 Out</span>
+</div>
+<div class="flex items-center gap-1.5 col-span-2 opacity-50">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="text-[11px] text-on-surface-variant">0 Watching</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Bidding Table -->
+<section>
+<div class="glass-panel rounded-2xl overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-black/5 border-b border-white/20">
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Asset Detail</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-on-surface-variant">Price Trend (30d)</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-on-surface-variant text-right">Current Bid</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-secondary text-center">Max Profitable Bid</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-secondary text-center">eBay Market Val</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-on-surface-variant text-right">ROI %</th>
+<th class="px-4 py-5 font-label-caps text-label-caps text-on-surface-variant text-center">Status</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-black/5">
+<!-- Row 1 -->
+<tr class="data-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-white/60 rounded-xl border border-white/80 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline" data-icon="router">router</span>
+</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-surface leading-tight">Deco AX5400 Mesh</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Networking • Brand New</p>
+</div>
+</div>
+</td>
+<td class="px-4 py-4">
+<div class="h-8 w-24">
+<svg class="w-full h-full text-secondary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,25 L10,20 L20,22 L30,15 L40,18 L50,10 L60,12 L70,5 L80,8 L90,2 L100,6"></path>
+</svg>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-table-data text-on-surface">$10.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$85.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$180.00</td>
+<td class="px-4 py-4 text-right font-table-data text-status-winning font-bold">741%</td>
+<td class="px-4 py-4 text-center">
+<span class="winning-pill">Winning</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="bg-primary text-on-primary font-label-caps text-[10px] px-5 py-2 rounded-lg uppercase hover:scale-105 active:scale-95 transition-all shadow-md">Quick Bid</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="data-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-white/60 rounded-xl border border-white/80 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline" data-icon="vacuum">vacuum</span>
+</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-surface leading-tight">Dyson V8 Origin Extra</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Home Appliances • Like New</p>
+</div>
+</div>
+</td>
+<td class="px-4 py-4">
+<div class="h-8 w-24">
+<svg class="w-full h-full text-secondary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,10 L10,12 L20,8 L30,20 L40,15 L50,18 L60,10 L70,12 L80,5 L90,8 L100,10"></path>
+</svg>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-table-data text-on-surface">$47.50</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$110.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$220.00</td>
+<td class="px-4 py-4 text-right font-table-data text-on-surface-variant font-bold">117%</td>
+<td class="px-4 py-4 text-center">
+<span class="outbid-pill">Outbid</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="bg-secondary text-on-secondary font-label-caps text-[10px] px-5 py-2 rounded-lg uppercase hover:scale-105 active:scale-95 transition-all shadow-md whitespace-nowrap">Increase Bid</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="data-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-white/60 rounded-xl border border-white/80 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline" data-icon="smart_toy">smart_toy</span>
+</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-surface leading-tight">Roomba Plus 4020</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Home Appliances • Refurbished</p>
+</div>
+</div>
+</td>
+<td class="px-4 py-4">
+<div class="h-8 w-24">
+<svg class="w-full h-full text-secondary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,20 L15,15 L30,22 L45,10 L60,12 L75,5 L90,15 L100,12"></path>
+</svg>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-table-data text-on-surface">$21.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$140.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$350.00</td>
+<td class="px-4 py-4 text-right font-table-data text-status-winning font-bold">1049%</td>
+<td class="px-4 py-4 text-center">
+<span class="winning-pill">Winning</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="bg-primary text-on-primary font-label-caps text-[10px] px-5 py-2 rounded-lg uppercase hover:scale-105 active:scale-95 transition-all shadow-md">Quick Bid</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="data-row">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-white/60 rounded-xl border border-white/80 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline" data-icon="speaker">speaker</span>
+</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-surface leading-tight">Samsung Q65C Soundbar</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Electronics • New In Box</p>
+</div>
+</div>
+</td>
+<td class="px-4 py-4">
+<div class="h-8 w-24">
+<svg class="w-full h-full text-secondary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,5 L20,10 L40,8 L60,15 L80,12 L100,18"></path>
+</svg>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-table-data text-on-surface">$80.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$120.00</td>
+<td class="px-4 py-4 text-center font-table-data text-secondary font-bold">$280.00</td>
+<td class="px-4 py-4 text-right font-table-data text-status-winning font-bold">165%</td>
+<td class="px-4 py-4 text-center">
+<span class="winning-pill">Winning</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="bg-primary text-on-primary font-label-caps text-[10px] px-5 py-2 rounded-lg uppercase hover:scale-105 active:scale-95 transition-all shadow-md">Quick Bid</button>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="bg-black/5 px-6 py-4 border-t border-white/10 flex justify-between items-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">Showing 4 active auctions from eBay.com</p>
+<div class="flex gap-2">
+<button class="p-1.5 hover:bg-white/50 rounded-lg border border-white/60 transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="p-1.5 hover:bg-white/50 rounded-lg border border-white/60 transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body></html>

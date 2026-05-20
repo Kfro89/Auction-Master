@@ -3,7 +3,7 @@ import asyncio
 import logging
 import datetime
 from sqlalchemy.orm import Session
-from ..models import Item, AuctionHouse, EbaySampleCache, Valuation
+from ..models import AuctionHouse, EbaySampleCache, Valuation
 from .ebay_auth import EbayAuthClient
 from .ebay_browse import EbayBrowseClient
 from .valuation import calculate_valuation, _persist_valuation
@@ -14,18 +14,40 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 6
 
 
-async def valuate_item_background(item_id: int, premium: float, target_roi: float = 0.30, model_name: str = "Item"):
+async def valuate_item_background(item_id: int, premium: float, target_roi: float = 0.30, model_name: str = "ResearchItem"):
     """
     Session-isolated task to fetch eBay valuation for a single item.
-    Supports Item, ResearchItem, BidItem.
+    Supports ResearchItem, BidItem.
     """
-    from ..models import Item, ResearchItem, BidItem
+    from ..models import ResearchItem, BidItem
     db = SessionLocal()
     try:
-        model_class = {"Item": Item, "ResearchItem": ResearchItem, "BidItem": BidItem}.get(model_name, Item)
+        model_class = {"ResearchItem": ResearchItem, "BidItem": BidItem}.get(model_name, ResearchItem)
         item = db.query(model_class).get(item_id)
-        if not item or not item.search_queries:
-            logger.warning(f"{model_name} {item_id} has no search queries for valuation.")
+        if not item:
+            logger.warning(f"{model_name} {item_id} not found.")
+            return
+
+        # If not enriched, run enrichment inline first
+        if not item.search_queries:
+            from .enrichment import _enrich_single_item
+            from .ai_providers import get_active_provider
+            provider = get_active_provider(db)
+            logger.info(f"Item {item_id} missing search queries, enriching first...")
+            cat_name, tags, brand, search_queries, condition_id, prod_name, condition, is_multimodal = await _enrich_single_item(item, provider)
+            item.category = cat_name
+            item.tags = tags
+            item.brand = brand
+            item.search_queries = search_queries
+            item.normalized_condition_id = condition_id
+            item.product_name = prod_name
+            item.condition = condition
+            item.processing_status = "pending_valuation"
+            db.commit()
+            db.refresh(item)
+
+        if not item.search_queries:
+            logger.warning(f"{model_name} {item_id} has no search queries for valuation even after enrichment attempt.")
             return
 
         from .security import get_ebay_credentials
@@ -146,15 +168,15 @@ async def batch_ebay_valuate(item_tasks: list, target_roi: float = 0.30, progres
             progress["current"] = progress_offset + i + len(batch)
 
 
-async def process_pending_valuations(db: Session, batch_size: int = 20):
+async def process_pending_valuations(db: Session, batch_size: int = 30):
     """
     Background worker task that identifies items without valuations and processes them.
-    Supports Item, ResearchItem, BidItem.
+    Supports ResearchItem and BidItem.
     """
-    from ..models import Item, ResearchItem, BidItem, Valuation
+    from ..models import ResearchItem, BidItem, Valuation
     
     # Priority order
-    model_types = [BidItem, ResearchItem, Item]
+    model_types = [BidItem, ResearchItem]
     
     all_item_tasks = []
     
@@ -166,7 +188,6 @@ async def process_pending_valuations(db: Session, batch_size: int = 20):
         
         # Link to correct column in Valuation
         val_fk = {
-            Item: Valuation.item_id,
             ResearchItem: Valuation.research_item_id,
             BidItem: Valuation.bid_item_id
         }[model]

@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn bash -c "rsync -avz --exclude='node_modules/' --exclude='venv/' --exclude='.git/' --exclude='.worktrees/' --exclude='__pycache__/' --exclude='dist/' --exclude='.gemini/' -e 'ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no' ./ kevin@192.168.0.16:~/Docker/AuctionMaster/"
+expect {
+    -nocase "*assword:*" {
+        send "password\r"
+        exp_continue
+    }
+    eof
+}

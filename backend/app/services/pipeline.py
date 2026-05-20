@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional, Callable, Coroutine
 from sqlalchemy.orm import Session
-from ..models import Item
 from .research_service import (
     discover_auctioneer_software, 
     discover_public_surplus, 
@@ -21,16 +20,18 @@ class PipelineStatus:
         self.callback = callback
         self.message = "Initializing..."
         self.new_items = 0
-        self.enriched = 0
+        self.enriched_text = 0
+        self.enriched_multimodal = 0
         self.valuated = 0
         self.errors = []
         self.current_stage = "idle"
 
-    async def update(self, message: str = None, stage: str = None, new_items: int = 0, enriched: int = 0, valuated: int = 0, error: str = None):
+    async def update(self, message: str = None, stage: str = None, new_items: int = 0, enriched_text: int = 0, enriched_multimodal: int = 0, valuated: int = 0, error: str = None):
         if message: self.message = message
         if stage: self.current_stage = stage
         if new_items: self.new_items += new_items
-        if enriched: self.enriched += enriched
+        if enriched_text: self.enriched_text += enriched_text
+        if enriched_multimodal: self.enriched_multimodal += enriched_multimodal
         if valuated: self.valuated += valuated
         if error:
             self.errors.append(error)
@@ -39,8 +40,9 @@ class PipelineStatus:
         
         # Log for server-side debugging
         status_log = f"[{self.current_stage.upper()}] {self.message}"
-        if new_items or enriched or valuated:
-            status_log += f" (New: {self.new_items}, Enriched: {self.enriched}, Valuated: {self.valuated})"
+        total_enriched = self.enriched_text + self.enriched_multimodal
+        if new_items or total_enriched or valuated:
+            status_log += f" (New: {self.new_items}, Enriched: {total_enriched} [Text: {self.enriched_text}, MM: {self.enriched_multimodal}], Valuated: {self.valuated})"
         logger.info(status_log)
 
         if self.callback:
@@ -48,7 +50,9 @@ class PipelineStatus:
                 "message": self.message,
                 "stage": self.current_stage,
                 "new_items": self.new_items,
-                "enriched": self.enriched,
+                "enriched": self.enriched_text + self.enriched_multimodal,
+                "enriched_text": self.enriched_text,
+                "enriched_multimodal": self.enriched_multimodal,
                 "valuated": self.valuated,
                 "error_count": len(self.errors),
                 "last_error": self.errors[-1] if self.errors else None
@@ -103,43 +107,47 @@ async def run_full_ingestion_pipeline(db: Session, update_status_callback=None):
         
         # --- PHASE 3: AI ENRICHMENT ---
         from ..models import ResearchItem, BidItem
+        from .ai_providers import get_ai_concurrency_limit
+        
         # Sum pending items across all models
         pending_enrich = (
             db.query(ResearchItem).filter(ResearchItem.processing_status == "pending_enrichment").count() +
-            db.query(BidItem).filter(BidItem.processing_status == "pending_enrichment").count() +
-            db.query(Item).filter(Item.processing_status == "pending_enrichment").count()
+            db.query(BidItem).filter(BidItem.processing_status == "pending_enrichment").count()
         )
         
         if pending_enrich > 0:
             await status.update(stage="enrichment", message=f"Classifying {pending_enrich} items via AI...")
             processed_enrich = 0
+            concurrency = get_ai_concurrency_limit(db)
             while True:
-                # Process in small batches to provide frequent UI updates
-                count = await enrich_pending_items(db, batch_size=10)
-                if count == 0: break
-                processed_enrich += count
-                await status.update(message=f"Enriched {processed_enrich}/{pending_enrich} items...", enriched=count)
+                # Process in batches equal to concurrency limit
+                text_count, mm_count = await enrich_pending_items(db, batch_size=concurrency)
+                if text_count + mm_count == 0: break
+                processed_enrich += (text_count + mm_count)
+                await status.update(message=f"Enriched {processed_enrich}/{pending_enrich} items...", enriched_text=text_count, enriched_multimodal=mm_count)
                 await asyncio.sleep(0.1) # Yield for other tasks
             
         # --- PHASE 4: EBAY VALUATION ---
         pending_val = (
             db.query(ResearchItem).filter(ResearchItem.processing_status == "pending_valuation").count() +
-            db.query(BidItem).filter(BidItem.processing_status == "pending_valuation").count() +
-            db.query(Item).filter(Item.processing_status == "pending_valuation").count()
+            db.query(BidItem).filter(BidItem.processing_status == "pending_valuation").count()
         )
         
         if pending_val > 0:
             await status.update(stage="valuation", message=f"Valuating {pending_val} items via eBay...")
             processed_val = 0
             while True:
-                count = await process_ebay_valuations(db, batch_size=5)
+                # eBay is more sensitive to concurrency, so we stick to a reasonable batch or use same limit
+                val_batch = min(get_ai_concurrency_limit(db), 15) 
+                count = await process_ebay_valuations(db, batch_size=val_batch)
                 if count == 0: break
                 processed_val += count
                 await status.update(message=f"Valuated {processed_val}/{pending_val} items...", valuated=count)
                 await asyncio.sleep(0.1)
 
         # --- FINISH ---
-        final_msg = f"Completed. Found {status.new_items} new items, Enriched {status.enriched}, Valuated {status.valuated}."
+        total_enriched = status.enriched_text + status.enriched_multimodal
+        final_msg = f"Completed. Found {status.new_items} new items, Enriched {total_enriched} [Text: {status.enriched_text}, MM: {status.enriched_multimodal}], Valuated {status.valuated}."
         await status.update(stage="idle", message=final_msg)
         return True
 

@@ -1,7 +1,8 @@
 import httpx
 from bs4 import BeautifulSoup
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from .base import BaseScraper
+from app.schemas.scraping import ScrapedAuction, ScrapedLot, ScrapedBid
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -21,16 +22,16 @@ class PublicSurplusScraper(BaseScraper):
             "Upgrade-Insecure-Requests": "1"
         }
 
-    async def discover_active_auctions(self) -> List[Dict[str, Any]]:
+    async def discover_active_auctions(self) -> List[ScrapedAuction]:
         # Treat the entire Public Surplus radius search as one virtual "Auction" event
-        return [{
-            "id": f"ps_search_{self.zip_code}_{self.radius}",
-            "name": f"Public Surplus: {self.radius}mi around {self.zip_code}",
-            "start_time": None,
-            "end_time": None
-        }]
+        return [ScrapedAuction(
+            id=f"ps_search_{self.zip_code}_{self.radius}",
+            name=f"Public Surplus: {self.radius}mi around {self.zip_code}",
+            start_time=None,
+            end_time=None
+        )]
 
-    async def fetch_auction_lots(self, auction_id: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    async def fetch_auction_lots(self, auction_id: str) -> Tuple[ScrapedAuction, List[ScrapedLot]]:
         url = f"{self.base_url}/sms/browse/search"
         
         all_lots = []
@@ -103,18 +104,16 @@ class PublicSurplusScraper(BaseScraper):
                             if not image_url.startswith("http"):
                                 image_url = self.base_url + image_url
 
-                        all_lots.append({
-                            "id": auc_id,
-                            "lot_number": auc_id,
-                            "title": title,
-                            "description": f"Public Surplus Item #{auc_id}",
-                            "price": price,
-                            "current_bid": price,
-                            "end_time": None, # Should be parsed from the search results if possible
-                            "status": "open",
-                            "url": f"{self.base_url}{href}",
-                            "primary_image": {"url": image_url} if image_url else None
-                        })
+                        all_lots.append(ScrapedLot(
+                            id=auc_id,
+                            lot_number=auc_id,
+                            title=title,
+                            description=f"Public Surplus Item #{auc_id}",
+                            current_bid=price,
+                            end_time=None, # Should be parsed from the search results if possible
+                            url=f"{self.base_url}{href}",
+                            image_url=image_url
+                        ))
                     
                     logger.info(f"Parsed {page_lots_count} new items from Public Surplus page {page}.")
                     
@@ -129,7 +128,15 @@ class PublicSurplusScraper(BaseScraper):
                     break
 
         logger.info(f"Finished Public Surplus search. Total items: {len(all_lots)}")
-        return {"id": auction_id}, all_lots
+        
+        auction = ScrapedAuction(
+            id=auction_id,
+            name=f"Public Surplus: {self.radius}mi around {self.zip_code}",
+            start_time=None,
+            end_time=None
+        )
+        
+        return auction, all_lots
 
     async def health_check(self) -> bool:
         url = f"{self.base_url}/sms/browse/search"
@@ -180,17 +187,22 @@ class PublicSurplusScraper(BaseScraper):
         # Stub for bid submission
         raise NotImplementedError("Direct bidding structure not fully mapped for Public Surplus yet.")
 
-    async def fetch_my_bids(self) -> List[Dict[str, Any]]:
-        """
-        Fetches the user's active bids dashboard using the session cookie 
-        and extracts bidding data.
-        Raises PermissionError if the cookie is rejected (401/403).
-        """
+    async def fetch_my_bids(self, buyer_id: str = None) -> List[ScrapedBid]:
+        if "Cookie" not in self.headers:
+            raise PermissionError("No session cookie set. Call login() first.")
+        
+        url_active = f"{self.base_url}/sms/mys/bids"
+        return await self._fetch_ps_bids(url_active, "open")
+
+    async def fetch_closed_bids(self, buyer_id: str = None) -> List[ScrapedBid]:
         if "Cookie" not in self.headers:
             raise PermissionError("No session cookie set. Call login() first.")
             
-        url = f"{self.base_url}/sms/mys/bids?tm=m"
-        
+        url_past = f"{self.base_url}/sms/mys/pastbids"
+        return await self._fetch_ps_bids(url_past, "closed")
+
+    async def _fetch_ps_bids(self, url: str, status_filter: str) -> List[ScrapedBid]:
+        bidding_data = []
         async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
             try:
                 response = await client.get(url)
@@ -199,62 +211,111 @@ class PublicSurplusScraper(BaseScraper):
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
                 
-                bidding_data = []
                 table = soup.find('table', {'class': 'table'})
-                if not table:
-                    return []
-                    
-                tbody = table.find('tbody')
-                if not tbody:
-                    return []
-                    
-                rows = tbody.find_all('tr')
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) >= 8:
-                        auc_id = cols[0].get_text(strip=True)
-                        title_tag = cols[1].find('a')
-                        title = title_tag.get_text(strip=True) if title_tag else "Unknown Title"
-                        end_date = cols[3].get_text(strip=True)
-                        
-                        def parse_price(text):
-                            cleaned = text.replace('$', '').replace(',', '').strip()
-                            try:
-                                return float(cleaned)
-                            except ValueError:
-                                return 0.0
-                                
-                        current_bid = parse_price(cols[5].get_text())
-                        user_bid = parse_price(cols[6].get_text())
-                        proxy_bid = parse_price(cols[7].get_text())
-                        
-                        # Try to parse end_time
-                        end_time_val = end_date
-                        is_closed = "closed" in end_date.lower() or "ended" in end_date.lower()
-                        for fmt in ["%b %d, %Y %I:%M %p", "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M"]:
-                            try:
-                                dt = datetime.strptime(end_date, fmt)
-                                end_time_val = dt.isoformat()
-                                break
-                            except:
-                                continue
+                if table and table.find('tbody'):
+                    for row in table.find('tbody').find_all('tr'):
+                        cols = row.find_all('td')
+                        if len(cols) >= 8:
+                            auc_id = cols[0].get_text(strip=True)
+                            
+                            # Check for winning status
+                            # In active bids, winning.gif means currently winning.
+                            # In past bids, it might indicate won.
+                            is_winning = bool(cols[1].find('img', title='Winning') or cols[1].find('img', alt='Winning'))
+                            
+                            title_tag = cols[1].find('a')
+                            title = title_tag.get_text(strip=True) if title_tag else "Unknown Title"
+                            
+                            # Extract end_time from script tag updateTimeLeftSpan
+                            end_time_val = None
+                            script_tag = row.find('script')
+                            if script_tag and script_tag.string:
+                                import re
+                                match = re.search(r'updateTimeLeftSpan[^,]+,[^,]+,[^,]+,[^,]+,\s*(\d{13})', script_tag.string)
+                                if match:
+                                    end_time_val = datetime.fromtimestamp(int(match.group(1))/1000.0, tz=timezone.utc)
+                            
+                            def parse_price(text):
+                                cleaned = text.replace('$', '').replace(',', '').strip()
+                                try: return float(cleaned)
+                                except ValueError: return 0.0
+                                    
+                            current_bid = parse_price(cols[5].get_text())
+                            user_bid = parse_price(cols[6].get_text())
+                            proxy_bid = parse_price(cols[7].get_text())
+                            
+                            user_status = "winning" if is_winning else "outbid"
+                            if status_filter == "closed":
+                                user_status = "won" if is_winning else "lost"
 
-                        bidding_data.append({
-                            "id": auc_id,
-                            "title": title,
-                            "end_time": end_time_val,
-                            "status": "closed" if is_closed else "open",
-                            "current_bid": current_bid,
-                            "user_bid": user_bid,
-                            "proxy_bid": proxy_bid
-                        })
-                        
-                return bidding_data
+                            bidding_data.append(ScrapedBid(
+                                id=auc_id,
+                                title=title,
+                                end_time=end_time_val,
+                                status=status_filter,
+                                current_bid=current_bid,
+                                user_bid=user_bid,
+                                proxy_bid=proxy_bid,
+                                user_bid_status=user_status
+                            ))
             except PermissionError:
                 raise
             except Exception as e:
-                logger.error(f"Error fetching Public Surplus my bids: {e}")
-                raise
+                logger.error(f"Error fetching Public Surplus bids from {url}: {e}")
+                raise e
+
+        return bidding_data
+
+    async def fetch_item_details(self, auc_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/sms/auction/view?auc={auc_id}"
+        async with httpx.AsyncClient(headers=self.headers, timeout=15.0, follow_redirects=True) as client:
+            try:
+                response = await client.get(url)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                # Title extraction
+                title = "Unknown Title"
+                title_tag = soup.select_one('span.text-wrap')
+                if title_tag:
+                    title_text = title_tag.get_text(strip=True)
+                    # Often looks like "Auction #4005533 -  Item Title"
+                    if " - " in title_text:
+                        title = title_text.split(" - ", 1)[1].strip()
+                    else:
+                        title = title_text
+                
+                # Description extraction
+                description = ""
+                desc_div = soup.select_one('div.description')
+                if desc_div:
+                    description = desc_div.get_text(separator="\n", strip=True)
+                
+                # Images extraction
+                images = []
+                img_tags = soup.select('img.img-thumbnail')
+                for img in img_tags:
+                    src = img.get('src')
+                    if src:
+                        # Convert thumbnail URL to full size if possible
+                        if 'thumb=b' in src:
+                            src = src.replace('thumb=b', 'thumb=n')
+                        if not src.startswith('http'):
+                            src = self.base_url + src
+                        if src not in images:
+                            images.append(src)
+                
+                return {
+                    "id": auc_id,
+                    "title": title,
+                    "description": description,
+                    "images": images,
+                    "primary_image": {"url": images[0]} if images else None,
+                    "status": "open" # If we can reach the page, it's likely open
+                }
+            except Exception as e:
+                logger.error(f"Error fetching Public Surplus item details for {auc_id}: {e}")
+                return None
 
     async def fetch_lot_image(self, auc_id: str) -> str:
         url = f"{self.base_url}/sms/auction/view?auc={auc_id}"

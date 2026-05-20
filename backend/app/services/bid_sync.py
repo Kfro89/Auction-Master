@@ -1,32 +1,35 @@
 from datetime import datetime, timezone
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from ..models import AuctionHouse, Item, Setting, UserBidActivity
-from ..scrapers.auctioneer_software import AuctioneerSoftwareScraper
+from ..models import AuctionHouse, BidItem, ResearchItem, Setting
+from ..scrapers.whitley_auction import WhitleyAuctionScraper
+from ..scrapers.roller_auction import RollerAuctionScraper
 from ..scrapers.public_surplus import PublicSurplusScraper
 from ..scrapers.bid_wrangler import BidWranglerApiScraper
 from ..scrapers.govdeals import GovDealsScraper
 from .security import decrypt_value
 from .valuation_worker import valuate_item_background
+from .llm import generate_valuation_data
 import logging
 
 logger = logging.getLogger(__name__)
 
+PLATFORMS = [
+    ("rmeb", "https://www.whitleyauction.com", "Whitley Auction", WhitleyAuctionScraper),
+    ("rol", "https://bid.rollerauction.com", "Roller Auction", RollerAuctionScraper),
+    ("public_surplus", "https://www.publicsurplus.com", "Public Surplus", PublicSurplusScraper),
+    ("dickensheet", "https://bid.dickensheet.com", "Dickensheet", BidWranglerApiScraper),
+    ("govdeals", "https://www.govdeals.com", "GovDeals", GovDealsScraper),
+]
+
 async def sync_active_bids(db: Session):
     """
     Independent service to synchronize user's active bids across all platforms.
-    Definitive source of truth for is_user_bidding and UserBidActivity.
+    Definitive source of truth for BidItem.
     """
-    platforms = [
-        ("rmeb", "https://www.whitleyauction.com", "Whitley Auction", AuctioneerSoftwareScraper),
-        ("rol", "https://bid.rollerauction.com", "Roller Auction", AuctioneerSoftwareScraper),
-        ("public_surplus", "https://www.publicsurplus.com", "Public Surplus", PublicSurplusScraper),
-        ("dickensheet", "https://bid.dickensheet.com", "Dickensheet", BidWranglerApiScraper),
-        ("govdeals", "https://www.govdeals.com", "GovDeals", GovDealsScraper),
-    ]
-
     results = {}
 
-    for website_key, base_url, name, scraper_class in platforms:
+    for website_key, base_url, name, scraper_class in PLATFORMS:
         try:
             # 1. Get Credentials
             cookie_setting = db.query(Setting).filter(Setting.key == f"{website_key}_cookie").first()
@@ -36,7 +39,7 @@ async def sync_active_bids(db: Session):
 
             session_cookie = decrypt_value(cookie_setting.value)
             
-            if scraper_class == AuctioneerSoftwareScraper:
+            if scraper_class in [WhitleyAuctionScraper, RollerAuctionScraper]:
                 scraper = scraper_class(base_url=base_url, website_key=website_key)
             elif scraper_class == BidWranglerApiScraper:
                 scraper = scraper_class(base_url=base_url)
@@ -79,92 +82,144 @@ async def sync_active_bids(db: Session):
             updated_count = 0
             
             for bid in my_bids:
-                bid_id = str(bid["id"])
+                bid_id = bid.id
                 seen_ext_ids.add(bid_id)
                 
-                item = db.query(Item).filter(Item.external_id == bid_id, Item.auction_house_id == house.id).first()
+                item = db.query(BidItem).filter(BidItem.external_id == bid_id, BidItem.auction_house_id == house.id).first()
                 
                 if not item:
-                    # AUTO-INGEST MISSING ITEM
-                    logger.info(f"BidSync: Auto-ingesting missing item {bid_id} from {name}")
-                    details = None
-                    if hasattr(scraper, "fetch_item_details"):
-                        details = await scraper.fetch_item_details(bid_id)
+                    # PROMOTION LOGIC: Check if it exists in ResearchItem
+                    research_item = db.query(ResearchItem).filter(ResearchItem.external_id == bid_id, ResearchItem.auction_house_id == house.id).first()
                     
-                    if details:
-                        item = Item(
+                    if research_item:
+                        logger.info(f"BidSync: Promoting ResearchItem {bid_id} to BidItem")
+                        item = BidItem(
                             auction_house_id=house.id,
+                            auction_id=research_item.auction_id,
                             external_id=bid_id,
-                            title=details.get("title", bid.get("title", "Unknown Item")),
-                            description=details.get("description", ""),
-                            current_bid=bid["current_bid"],
-                            end_time=datetime.fromisoformat(bid["end_time"]) if bid.get("end_time") else None,
-                            status="open",
-                            image_url=details["images"][0] if details.get("images") else None,
-                            images=details.get("images", []),
-                            url=f"{base_url}/sms/auction/view?auc={bid_id}" if website_key == "public_surplus" else None,
-                            first_seen_at=datetime.now(timezone.utc),
-                            last_seen_at=datetime.now(timezone.utc),
-                            is_user_bidding=True,
-                            processing_status="pending_enrichment"
+                            lot_number=research_item.lot_number,
+                            title=research_item.title,
+                            description=research_item.description,
+                            url=research_item.url,
+                            image_url=research_item.image_url,
+                            images=research_item.images,
+                            current_bid_amount=bid.current_bid,
+                            user_bid_amount=bid.user_bid,
+                            user_proxy_bid=bid.proxy_bid,
+                            user_bid_status=bid.user_bid_status,
+                            end_time=bid.end_time,
+                            category=research_item.category,
+                            product_name=research_item.product_name,
+                            condition=research_item.condition,
+                            brand=research_item.brand,
+                            tags=research_item.tags,
+                            search_queries=research_item.search_queries,
+                            normalized_condition_id=research_item.normalized_condition_id,
+                            processing_status=research_item.processing_status
                         )
+                        db.add(item)
                     else:
-                        # Minimal stub
-                        item = Item(
-                            auction_house_id=house.id,
-                            external_id=bid_id,
-                            title=bid.get("title", "Unknown Item"),
-                            current_bid=bid["current_bid"],
-                            end_time=datetime.fromisoformat(bid["end_time"]) if bid.get("end_time") else None,
-                            status="open",
-                            first_seen_at=datetime.now(timezone.utc),
-                            last_seen_at=datetime.now(timezone.utc),
-                            is_user_bidding=True,
-                            processing_status="pending_enrichment"
-                        )
-                    db.add(item)
+                        # AUTO-INGEST MISSING ITEM
+                        logger.info(f"BidSync: Auto-ingesting missing bid item {bid_id} from {name}")
+                        details = None
+                        if hasattr(scraper, "fetch_item_details"):
+                            details = await scraper.fetch_item_details(bid_id)
+                        
+                        if details:
+                            item = BidItem(
+                                auction_house_id=house.id,
+                                external_id=bid_id,
+                                title=details.get("title") or bid.title or "Unknown Item",
+                                description=details.get("description", ""),
+                                current_bid_amount=bid.current_bid,
+                                user_bid_amount=bid.user_bid,
+                                user_proxy_bid=bid.proxy_bid,
+                                user_bid_status=bid.user_bid_status,
+                                end_time=bid.end_time,
+                                image_url=details["images"][0] if details.get("images") else None,
+                                images=details.get("images", []),
+                                url=f"{base_url}/sms/auction/view?auc={bid_id}" if website_key == "public_surplus" else None,
+                                processing_status="pending_enrichment"
+                            )
+                        else:
+                            # Minimal stub
+                            item = BidItem(
+                                auction_house_id=house.id,
+                                external_id=bid_id,
+                                title=bid.title or "Unknown Item",
+                                current_bid_amount=bid.current_bid,
+                                user_bid_amount=bid.user_bid,
+                                user_proxy_bid=bid.proxy_bid,
+                                user_bid_status=bid.user_bid_status,
+                                end_time=bid.end_time,
+                                processing_status="pending_enrichment"
+                            )
+                        db.add(item)
                     db.flush() # Ensure we have item.id
                 
-                # Update Item state
-                item.is_user_bidding = True
-                item.status = bid.get("status", "open")
-                item.current_bid = bid["current_bid"]
-                if bid.get("end_time"):
+                # Update BidItem state
+                item.user_bid_status = bid.user_bid_status or "unknown"
+                item.current_bid_amount = bid.current_bid
+                item.user_bid_amount = bid.user_bid
+                item.user_proxy_bid = bid.proxy_bid
+                item.end_time = bid.end_time
+                
+                # Update title if scraper provides a better/longer one
+                if bid.title and (not item.title or item.title == "Unknown" or len(bid.title) > len(item.title)):
+                    item.title = bid.title
+                
+                # Inline LLM extraction if product_name is missing or looks like a raw title fallback
+                should_extract = not item.product_name or item.product_name == item.title
+                if not should_extract and item.product_name:
+                    p_name_lower = item.product_name.lower()
+                    if len(item.product_name) > 70:
+                        should_extract = True
+                    elif "lot " in p_name_lower or "lot #" in p_name_lower:
+                        should_extract = True
+
+                if should_extract:
+                    logger.info(f"BidSync: Running inline LLM extraction for bid item {item.id} (Current product_name: '{item.product_name}')")
+                    raw_category = f"Category {item.category}" if item.category else "Unknown"
                     try:
-                        item.end_time = datetime.fromisoformat(bid["end_time"])
-                    except:
-                        pass
-                
-                # Update UserBidActivity
-                bid_activity = db.query(UserBidActivity).filter(UserBidActivity.item_id == item.id).first()
-                if not bid_activity:
-                    bid_activity = UserBidActivity(item_id=item.id)
-                    db.add(bid_activity)
-                
-                bid_activity.current_bid_amount = bid["current_bid"]
-                bid_activity.user_bid_amount = bid["user_bid"]
-                bid_activity.user_proxy_bid = bid["proxy_bid"]
-                
-                if "user_bid_status" in bid:
-                    bid_activity.user_bid_status = bid["user_bid_status"]
-                else:
-                    bid_activity.user_bid_status = "winning" if bid["user_bid"] >= bid["current_bid"] else "outbid"
+                        extraction_title = bid.title or item.title
+                        # Collect all available images
+                        image_urls = []
+                        if item.image_url:
+                            image_urls.append(item.image_url)
+                        if item.images and isinstance(item.images, list):
+                            for img in item.images:
+                                if img not in image_urls:
+                                    image_urls.append(img)
+
+                        classification = await generate_valuation_data(
+                            extraction_title,
+                            item.description or "",
+                            raw_category,
+                            image_urls=image_urls,
+                            db=db
+                        )
+                        item.category = f"{classification.get('category', 'Unknown')} > {classification.get('type', 'General')}"
+                        item.product_name = classification.get("product_name", "")
+                        item.condition = classification.get("condition", "Unknown")
+                        item.brand = classification.get("brand", "")
+                        item.tags = classification.get("tags", {})
+                        if item.brand and "Brand" not in item.tags:
+                            item.tags["Brand"] = item.brand
+                        item.search_queries = classification.get("search_queries", [])
+                        item.normalized_condition_id = classification.get("normalized_condition_id", "3000")
+                        item.processing_status = "pending_valuation"
+                        db.commit() 
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"BidSync: Inline LLM extraction failed for bid item {item.id}: {e}")
                 
                 updated_count += 1
 
             db.commit()
             
-            # 5. Cleanup: Mark items as closed if they are no longer in the active bids list
-            # ONLY for items we were previously bidding on
-            closed_count = db.query(Item).filter(
-                Item.auction_house_id == house.id,
-                Item.is_user_bidding == True,
-                Item.status == "open",
-                ~Item.external_id.in_(seen_ext_ids)
-            ).update({"status": "closed"}, synchronize_session=False)
-            
-            db.commit()
-            results[website_key] = {"status": "success", "updated": updated_count, "closed": closed_count}
+            # 5. Cleanup: Active BidItems that have ended or disappeared
+            # (Handled by win_verification or status updates)
+            results[website_key] = {"status": "success", "updated": updated_count}
             
             if hasattr(scraper, "close"):
                 await scraper.close()

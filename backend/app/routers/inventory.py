@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from typing import List, Optional
 import os
 import datetime
 import statistics
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import InventoryItem, Item, InventoryParentLot, InventoryCostLineItem
+from ..models import InventoryItem, InventoryParentLot, InventoryCostLineItem, ResearchItem
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.drafting import generate_ebay_draft
@@ -16,62 +16,59 @@ from ..auth import get_current_user
 
 router = APIRouter()
 
-class ScanRequest(BaseModel):
-    barcode: str
-
 class InventoryItemUpdate(BaseModel):
     title: Optional[str] = None
-    anti_tamper_tag: Optional[str] = None
+    product_name: Optional[str] = None
+    condition: Optional[str] = None
     drafted_title: Optional[str] = None
     drafted_description: Optional[str] = None
-    ebay_category_id: Optional[str] = None
     buy_price: Optional[float] = None
     estimated_price: Optional[float] = None
     status: Optional[str] = None
-    images: Optional[List[str]] = None
+    storage_location: Optional[str] = None
+    shipping_carrier: Optional[str] = None
+    tracking_number: Optional[str] = None
+    anti_tamper_tag: Optional[str] = None
     weight: Optional[float] = None
     length: Optional[float] = None
     width: Optional[float] = None
     height: Optional[float] = None
-    storage_location: Optional[str] = None
-    tracking_number: Optional[str] = None
-    shipping_method: Optional[str] = None
-    local_pickup_address: Optional[str] = None
-    local_pickup_deadline: Optional[datetime.datetime] = None
 
-class LotSplitRequest(BaseModel):
-    split_count: int = 1
-    hammer_price: float = 0.0
-    buyer_premium_pct: float = 0.0
-    tax_rate: float = 0.0
-    misc_fees: float = 0.0
-    title: Optional[str] = None
-
-class CostLineItemCreate(BaseModel):
+class CostLineItemRequest(BaseModel):
     label: str
     amount: float
-    category: str = "refurb"
+    category: str = "misc"
 
 @router.get("/")
 async def list_inventory(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    return db.query(InventoryItem).order_by(InventoryItem.created_at.desc()).all()
-
-@router.post("/scan")
-async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    barcode = request.barcode
+    items = db.query(InventoryItem).options(
+        joinedload(InventoryItem.parent_lot),
+        joinedload(InventoryItem.cost_line_items)
+    ).all()
     
-    # 1. Check existing inventory
-    existing_inventory = db.query(InventoryItem).filter(InventoryItem.barcode == barcode).first()
-    if existing_inventory:
-        return existing_inventory
+    # Simple serialization
+    results = []
+    for item in items:
+        item_dict = {c.name: getattr(item, c.name) for c in item.__table__.columns}
+        item_dict["cost_line_items"] = [
+            {"id": c.id, "label": c.label, "amount": c.amount, "category": c.category} 
+            for c in item.cost_line_items
+        ]
+        if item.parent_lot:
+            item_dict["hammer_price"] = item.parent_lot.hammer_price
+            item_dict["buyer_premium_pct"] = item.parent_lot.buyer_premium_pct
+            item_dict["tax_rate"] = item.parent_lot.tax_rate
+        results.append(item_dict)
+        
+    return results
 
-    # 2. Check research (Item model)
-    # Search for barcode in title, description, or mpn
-    research_item = db.query(Item).filter(
+@router.post("/barcode/{barcode}")
+async def create_item_from_barcode(barcode: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    # 1. Search ResearchItems for MPN match
+    research_item = db.query(ResearchItem).filter(
         or_(
-            Item.title.contains(barcode),
-            Item.description.contains(barcode),
-            Item.mpn == barcode
+            ResearchItem.lot_number == barcode,
+            ResearchItem.external_id == barcode
         )
     ).first()
     
@@ -124,151 +121,94 @@ async def scan_barcode(request: ScanRequest, db: Session = Depends(get_db), curr
 async def update_inventory_item(id: int, update_data: InventoryItemUpdate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    
-    # Validation for status transitions
-    if update_data.status:
-        valid_statuses = ["WON", "PAID", "TRANSIT_VENDOR", "TRANSIT_LOCAL", "RECEIVED", "REFURBISH", "STAGING", "READY_TO_LIST", "listed", "sold", "staged"]
-        if update_data.status not in valid_statuses:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {update_data.status}")
+        raise HTTPException(status_code=404, detail="Item not found")
 
     update_dict = update_data.model_dump(exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(item, key, value)
     
+    # Status validation
+    if "status" in update_dict:
+        valid_statuses = ["WON", "PAID", "SHIPPED", "STAGING", "REFURBISH", "DRAFTING", "LISTED", "SOLD"]
+        if update_dict["status"] not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {update_dict['status']}")
+    
+    # Special handling for hammer price/premium if linked to parent lot
+    parent_lot_keys = ["hammer_price", "buyer_premium_pct", "tax_rate"]
+    if any(k in update_dict for k in parent_lot_keys) and item.parent_lot:
+        for k in parent_lot_keys:
+            if k in update_dict:
+                setattr(item.parent_lot, k, update_dict[k])
+        
+        # Update acquisition cost line item if it exists
+        acq_cost = db.query(InventoryCostLineItem).filter(
+            InventoryCostLineItem.inventory_item_id == item.id,
+            InventoryCostLineItem.category == "acquisition"
+        ).first()
+        
+        if acq_cost:
+            # Re-calculate
+            hammer = item.parent_lot.hammer_price
+            premium = hammer * (item.parent_lot.buyer_premium_pct / 100)
+            tax = (hammer + premium) * (item.parent_lot.tax_rate / 100)
+            
+            # If multiple items share this lot, we'd need to divide, 
+            # but for now we assume 1:1 or simplified allocation
+            # Let's count siblings
+            sibling_count = db.query(InventoryItem).filter(InventoryItem.parent_lot_id == item.parent_lot_id).count()
+            cost_per_item = (hammer + premium + tax) / max(1, sibling_count)
+            acq_cost.amount = cost_per_item
+    
+    for key, value in update_dict.items():
+        if key not in parent_lot_keys:
+            setattr(item, key, value)
+
     db.commit()
     db.refresh(item)
     return item
 
-@router.post("/items/{item_id}/won")
-async def mark_item_as_won(item_id: int, request: LotSplitRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    # 1. Fetch Auction Item
-    auction_item = db.query(Item).filter(Item.id == item_id).first()
-    if not auction_item:
-        raise HTTPException(status_code=404, detail="Auction item not found")
-
-    # 2. Create Parent Lot
-    parent_lot = InventoryParentLot(
-        source_item_id=item_id,
-        title=request.title or auction_item.title,
-        hammer_price=request.hammer_price,
-        buyer_premium_pct=request.buyer_premium_pct,
-        tax_rate=request.tax_rate,
-        misc_fees=request.misc_fees
-    )
-    db.add(parent_lot)
-    db.commit()
-    db.refresh(parent_lot)
-
-    # 3. Create Child Inventory Items
-    inventory_items = []
-    for i in range(request.split_count):
-        title = parent_lot.title
-        if request.split_count > 1:
-            title = f"{parent_lot.title} (Part {i+1})"
-            
-        inv_item = InventoryItem(
-            parent_lot_id=parent_lot.id,
-            title=title,
-            status="WON",
-            images=auction_item.images or []
-        )
-        db.add(inv_item)
-        inventory_items.append(inv_item)
-    
-    db.commit()
-
-    # 4. Map initial costs to InventoryCostLineItems (even distribution)
-    total_acquisition_cost = (
-        request.hammer_price + 
-        (request.hammer_price * (request.buyer_premium_pct / 100)) +
-        (request.hammer_price * (request.tax_rate / 100)) +
-        request.misc_fees
-    )
-    
-    cost_per_item = total_acquisition_cost / request.split_count
-    
-    for inv_item in inventory_items:
-        cost_line = InventoryCostLineItem(
-            inventory_item_id=inv_item.id,
-            label="Initial Acquisition (Allocated)",
-            amount=cost_per_item,
-            category="acquisition"
-        )
-        db.add(cost_line)
-    
-    db.commit()
-    
-    # Update auction item status
-    auction_item.status = "won"
-    db.commit()
-
-    return {"parent_lot_id": parent_lot.id, "inventory_item_ids": [it.id for it in inventory_items]}
-
 @router.post("/{id}/costs")
-async def add_cost_line_item(id: int, request: CostLineItemCreate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def add_cost_line_item(id: int, cost: CostLineItemRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    
-    cost_line = InventoryCostLineItem(
-        inventory_item_id=id,
-        label=request.label,
-        amount=request.amount,
-        category=request.category
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    new_cost = InventoryCostLineItem(
+        inventory_item_id=item.id,
+        parent_lot_id=item.parent_lot_id,
+        label=cost.label,
+        amount=cost.amount,
+        category=cost.category
     )
-    db.add(cost_line)
+    db.add(new_cost)
     db.commit()
-    db.refresh(item)
+    db.refresh(new_cost)
     
-    return [{"id": c.id, "label": c.label, "amount": c.amount, "category": c.category, "created_at": c.created_at} for c in item.cost_line_items]
+    # Return all costs for this item
+    return db.query(InventoryCostLineItem).filter(InventoryCostLineItem.inventory_item_id == item.id).all()
 
-from ..services.ai_staging import generate_ai_listing, select_best_packaging
-from ..services.labels import generate_thermal_label_pdf
-from fastapi.responses import Response
-
-@router.post("/{id}/label")
-async def get_label(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    
-    pdf_content = await generate_thermal_label_pdf(item)
-    return Response(content=pdf_content, media_type="application/pdf")
-
-@router.post("/{id}/auto-package")
-async def auto_package_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
-    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    
-    best_fit = await select_best_packaging(item, db)
-    if not best_fit:
-        return {"status": "no_fit_found"}
-    
-    # Add packaging cost
-    cost_line = InventoryCostLineItem(
-        inventory_item_id=id,
-        label=f"Packaging: {best_fit.name}",
-        amount=best_fit.total_cost,
-        category="packaging"
-    )
-    db.add(cost_line)
+@router.delete("/{item_id}/costs/{cost_id}")
+async def delete_cost_line_item(item_id: int, cost_id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    cost = db.query(InventoryCostLineItem).filter(
+        InventoryCostLineItem.id == cost_id,
+        InventoryCostLineItem.inventory_item_id == item_id
+    ).first()
+    if not cost:
+        raise HTTPException(status_code=404, detail="Cost item not found")
+        
+    db.delete(cost)
     db.commit()
-    
-    return {"status": "success", "package_name": best_fit.name, "cost": best_fit.total_cost}
+    return {"status": "success"}
 
 @router.post("/{id}/draft")
 async def draft_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
+        raise HTTPException(status_code=404, detail="Item not found")
     
     item.status = "drafting"
     db.commit()
     
     try:
-        draft = await generate_ebay_draft(item.title)
+        draft = await generate_ebay_draft(item.product_name or item.title)
         item.drafted_title = draft["title"]
         item.drafted_description = draft["description"]
         item.status = "drafting" 
@@ -276,14 +216,26 @@ async def draft_item(id: int, db: Session = Depends(get_db), current_user: str =
         db.refresh(item)
         return item
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Drafting failed: {str(e)}")
+        item.status = "error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
 
-from ..schemas import SoldItemResponse
+@router.post("/{id}/auto-package")
+async def auto_package_item(id: int, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    from ..services.ai_staging import select_best_packaging
+    item = db.query(InventoryItem).filter(InventoryItem.id == id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    result = await select_best_packaging(item, db)
+    if not result:
+        raise HTTPException(status_code=400, detail="Could not find suitable packaging")
+        
+    return result
 
-@router.get("/sold-queue", response_model=List[SoldItemResponse])
-def get_sold_queue(db: Session = Depends(get_db)):
-    # Mock return for sold items awaiting shipment
+@router.get("/sold-queue")
+async def list_sold_queue(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    # Mock for fulfillment
     return [{"id": 1, "title": "Mock Sold Item", "status": "SOLD", "storage_location": "Bin 12", "packaging_config": "8x8x8 Box"}]
 
 class ReconcileRequest(BaseModel):
@@ -291,8 +243,6 @@ class ReconcileRequest(BaseModel):
     final_shipping: float
 
 @router.post("/{id}/reconcile")
-def reconcile_item(id: int, request: ReconcileRequest, db: Session = Depends(get_db)):
-    # Update item status to ARCHIVED and log final costs. 
-    # For now, we just need to return the mock payload to make the test pass.
-    # We will refine the DB state in a later step if needed.
-    return {"id": id, "status": "ARCHIVED", "final_fees": request.final_fees, "final_shipping": request.final_shipping}
+async def reconcile_sold_item(id: int, req: ReconcileRequest, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    # Mock
+    return {"status": "success"}

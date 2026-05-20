@@ -1,0 +1,2508 @@
+    <!DOCTYPE html>
+    <html lang='en'>
+        <head>
+            <title>Public Surplus: Current Bids</title>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+            <meta name="template" content="psV2/en/buyerview/CurrentView.ftlh"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <link rel="icon" href="/sms/20240825/images/ps_favicon.ico"/>
+
+<link href="/sms/20240825/styles/bootstrap-icons-1.11.1/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+<link href="/sms/20240825/styles/bootstrap-5.2.3/bootstrap.min.css" rel="stylesheet" type="text/css" />
+<link href="/sms/20240825/styles/ps-v2.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="/sms/20240825/js/bootstrap-5.2.3/bootstrap.bundle.min.js"></script>
+
+
+
+	<script type="text/javascript">
+	onerror = function(msg,url,l){
+		var txt="_s=5b5e9db0aec477a3e701f61252e3b064&_r=img";
+		txt+="&Msg="+escape(msg);
+		txt+="&URL="+escape(url);
+		txt+="&Line="+l;
+		txt+="&Platform="+escape(navigator.platform);
+		txt+="&UserAgent="+escape(navigator.userAgent);
+		var i = document.createElement("img");
+		i.setAttribute("src", (("https:" == document.location.protocol) ? "https://errorstack.appspot.com" : "http://www.errorstack.com") + "/submit?" + txt);
+		document.body.appendChild(i);
+	}
+	</script>
+
+
+            <script type="text/javascript" src="/sms/20240825/js/scriptaculous-js-1.8.0/lib/prototype.js"></script>
+            <script type="text/javascript" src="/sms/20240825/js/cookie.js"></script>
+
+            
+                
+
+            
+                    <script type="text/javascript"
+                            src="/sms/20240825/js/scriptaculous-js-1.8.0/src/effects.js"></script>
+                
+
+            
+    <link href="/sms/20240825/styles/ps-v2/auction/auc-grid.css" rel="stylesheet" type="text/css"/>
+    <link href="/sms/20240825/styles/ps-v2/auction-docs.css" rel="stylesheet" type="text/css"/>
+    <script type="text/javascript" src="/sms/20240825/js/xmlutils.js"></script>
+    <script type="text/javascript" src="/sms/20240825/js/ps-v2/time-left-countdown.js"></script>
+
+
+            
+                    <script type="text/javascript" src="/sms/20240825/js/lightbox-1.2.js"></script>
+                    <link href="/sms/20240825/styles/lightbox-1.2.css" rel="stylesheet" type="text/css"/>
+                    <link href="/sms/20240825/styles/ps-v2/responsive-lightbox-1.2.css" rel="stylesheet" type="text/css"/>
+                
+
+            
+                    <style type="text/css">
+                
+    .right-col {
+        display: flex;
+        flex-direction: column;
+    }
+
+                    </style>
+                
+
+            <script type="text/javascript">
+                    function Auction_PopupWindow(thispage, name, params, popup) {
+	if(!popup){
+		if(this.frameElement){
+			document.location.href=thispage;
+			return;
+		}else{
+			if(iframeModalBootstrap){
+				var modal = document.getElementById(name);
+				if (modal == null) {
+					name = 'iframeModal'
+					modal = document.getElementById(name)
+				}
+				if(modal){
+					modal = bootstrap.Modal.getOrCreateInstance(modal);
+					if(modal){
+						modal.show();
+						iframeModalBootstrap(name, thispage);
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	if (name == null) { name = "pop"; }
+	thiswindow = window.open(thispage,'psw_'+name,params);
+}
+                    /**
+     * Sets the 'src' property for an iframe embedded in a given modal.
+     * Creates an event listener event to reset the src value once the modal is hidden.
+     */
+    function iframeModalBootstrap(modalId, iframeSource) {
+        let iframeModal = document.getElementById("iframe"+modalId);
+        if (iframeModal !== null) {
+            iframeModal.setAttribute("src", iframeSource);
+        }
+        let iframeModalBootstrap = document.getElementById(modalId)
+        iframeModalBootstrap.addEventListener('hide.bs.modal', event => {
+            iframeModal.setAttribute("src", "");
+        })
+    }
+                    function loggingOut() {
+ if (confirm('Are you sure you want to logout?')) {
+   self.location.href="/sms/login/logout";
+ }
+}
+                    function loggingIn() {
+  var currLoc;
+  if (self.location.pathname && self.location.pathname.indexOf("/login/") < 0 && self.location.pathname.indexOf("/about/") < 0) {
+    currLoc = "?&dst=" + escape(self.location.pathname.substring("/sms".length) + self.location.search.replace(/\?_mls=(f|m)/, "").replace(/&_mls=(f|m)/, ""));
+  }
+  else {
+    currLoc = "";
+  }
+  self.location.href="/sms/login/login" + currLoc;
+}
+                    function throttle (cb, delay = 200) {
+          let shouldWait = false
+          let waitingArgs = null
+          let timeout
+
+          const timeoutFn = () => {
+            if (waitingArgs === null) {
+              shouldWait = false
+            } else {
+              cb(...waitingArgs)
+              waitingArgs = null
+              setTimeout(timeoutFn, delay)
+            }
+          }
+
+          return (...args) => {
+            if (shouldWait) {
+              waitingArgs = args
+              return
+            }
+
+            cb(...args)
+            shouldWait = true
+
+            clearTimeout(timeout) // Clear the timeout before setting a new one
+            timeout = setTimeout(timeoutFn, delay)
+          }
+        }
+                    function addCustomZoom(targetId, enableZoom = false) {
+		if(!enableZoom) return;
+
+		const handleResize = throttle(() => {
+			setPageScale(targetId)
+		});
+
+		document.addEventListener("DOMContentLoaded", () => setPageScale(targetId))
+		window.addEventListener("resize", () => { handleResize() } )
+	}
+
+	
+		function setPageScale(targetId) {
+			const target = document.getElementById(targetId)
+			if (!target) return
+
+			const baseWidth = 1610;
+			const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+			const currentWidth = window.innerWidth - scrollBarWidth;
+			const currentHeight = window.innerHeight;
+
+			if(currentWidth <= baseWidth) {
+				target.style.transform = 'none';
+				target.style.margin = '0';
+				return;
+			}
+
+			const scalePercentage = Math.round((currentWidth / baseWidth) * 100);
+			target.style.transform = 'scale(' + scalePercentage + '%)';
+
+			const verticalMargin = Math.ceil(((currentHeight * (scalePercentage / 100)) - currentHeight) / 2);
+			const horizontalMargin = Math.ceil((((currentWidth * (scalePercentage / 100)) - currentWidth) / 2) / (scalePercentage / 100));
+
+			target.style.margin = verticalMargin + 'px ' + horizontalMargin + 'px';
+		}
+                    
+    var daysTimeLeftLoc= 'days';
+	var dayTimeLeftLoc= 'day';
+	var hoursTimeLeftLoc= 'hours';
+	var hourTimeLeftLoc= 'hour';
+	var minsTimeLeftLoc= 'mins';
+	var minTimeLeftLoc= 'min';
+	var secsTimeLeftLoc= 'secs';
+	var secTimeLeftLoc= 'sec';
+	var endpointExtendTimeLeft = '/sms/auction/extendedTime';
+    function toggleAuctionGridView({ view, tab, saveViewMode }) {
+		if (view === 'g') {
+			document.querySelectorAll('[id^="auctionGridView"]')
+			.forEach(grid => {
+				grid.style.display = '';
+			});
+			document.querySelectorAll('[id^="auctionListView"]')
+			.forEach(grid => {
+				grid.style.display = 'none';
+			});
+			let hideShowImages = document.getElementById('hideShowImages');
+			if (hideShowImages) {
+				hideShowImages.style.display = 'none';
+			}
+		} else {
+			document.querySelectorAll('[id^="auctionListView"]')
+			.forEach(grid => {
+				grid.style.display = '';
+			});
+			let hideShowImages = document.getElementById('hideShowImages');
+			if (hideShowImages) {
+				hideShowImages.style.display = '';
+			}
+			document.querySelectorAll('[id^="auctionGridView"]')
+			.forEach(grid => {
+				grid.style.display = 'none';
+			});
+		}
+
+		if (saveViewMode) {
+			setAuctionViewMode(view, tab);
+		}
+	}
+
+
+
+	function setAuctionViewMode(view, tab) {
+		if(!view || !tab) return;
+
+		new Ajax.Request('/sms/mys/avmc', {
+			method: 'post',
+			parameters: { "view": view, "tab": tab },
+		});
+	}
+    function showLoading(){
+		$$('.ajax-loading-result').invoke('toggle');
+	}
+
+	function ajaxSearch(pageNumber) {
+		$$('.ajax-loading-button').invoke('disable');
+		var params = $(document.theform) ? $(document.theform).serialize(true) : {};
+		params['page'] = pageNumber;
+		setPageParamUrl(pageNumber);
+		var totalRows = $$('#auctionGridViewCurrent #auction_item #auctionsListContainer .auction-item').length;
+		params['samb'] = !$$('.ajax-loading-button').length > 0;
+		if($(document.theform)) {
+			document.theform.page.value = pageNumber;
+		}
+		new Ajax.Request('/sms/mys/bidsAjax',
+		{
+			parameters : params,
+			method: 'get',
+			onLoading: function() {
+				showLoading();
+			},
+			onSuccess: function(transport) {
+				if(!transport.responseXML) {
+					showLoading();
+					$$('.ajax-loading-button').invoke('enable');
+					return;
+				}
+				var gridview = transport.responseXML.documentElement.getElementsByTagName( "gridview" );
+				var tableview = transport.responseXML.documentElement.getElementsByTagName( "tableview" );
+				var pagination = transport.responseXML.documentElement.getElementsByTagName( "pagination" );
+				var showaucpct = transport.responseXML.documentElement.getElementsByTagName( "showaucpct" );
+				if (gridview == null || gridview.length < 1 || tableview == null || tableview.length < 1) {
+					showLoading();
+					$$('.ajax-loading-button').invoke('enable');
+					return;
+				}
+				var tableviewXml = tableview[0];
+				var gridviewXml = gridview[0];
+				if(totalRows > 25 && totalRows <= (2 * 25)) {
+					$$('#auctionTableView tbody tr').invoke('remove');
+					$$('#auctionGridViewCurrent #auction_item #auctionsListContainer .auction-item').invoke('remove');
+				}
+				if(showaucpct && showaucpct.length > 0 && showaucpct[0].getAttribute('value') == 'true') {
+					$$('.show-auc-pct').invoke('show');
+				}
+				document.querySelector("#auctionTableView tbody").insert(XmlUtils.getContentAsString(tableviewXml));
+				$("auctionsListContainer").insert(XmlUtils.getContentAsString(gridviewXml));
+				if (pagination != null && pagination.length > 0) {
+					var paginationXml = pagination[0];
+					$$(".ajax-loading-pagination").forEach(p=>p.update(XmlUtils.getContentAsString(paginationXml)));
+				}
+				showLoading();
+				$$('.ajax-loading-button').invoke('enable');
+				hideLazyImagesLoadingIcon();
+				activateIconTooltips();
+				Lightbox.updateImageList();
+			},
+			onFailure: function(transport) {
+				alert("There was an error loading the auctions. If the problem persists contact Public Surplus Customer Support.");
+				$$('.ajax-loading-button').invoke('enable');
+			}
+		});
+	}
+
+	window.onpopstate = function() {
+		location.reload();
+	};
+
+	function setPageParamUrl(pageNumber){
+		var url = new URL(window.location);
+		(url.searchParams.has('page') ? url.searchParams.set('page', pageNumber) : url.searchParams.append('page', pageNumber));
+		url.search = url.searchParams;
+		url = url.toString();
+		history.pushState({}, null, url);
+	}
+
+    function srchPage(pageNumber) {
+        document.theform.page.value = pageNumber;
+        document.theform.submit();
+    }
+
+    function initPage() {
+        Lightbox.initialize({
+	animate:false,
+	resizeSpeed:10,
+	responsive: true,
+	showGroupName:false,
+	strings : {
+		closeLink : '[Close]',
+		loadingMsg : 'loading',nextLink : '[Next &raquo;]',
+		prevLink : '[&laquo; Prev]',
+		startSlideshow : '[Start Slideshow]',
+		stopSlideshow : '[Stop Slideshow]',
+		numDisplayPrefix : 'Image',
+		numDisplaySeparator : 'of',
+		description : 'Description'
+	},
+	closeImage : '/sms/20240825/images/closeLightbox.png',
+	blankImage : '/sms/20240825/images/spacer.gif',
+	rotateLeftImage : '/sms/20240825/images/rotateLeft.png',
+	rotateRightImage : '/sms/20240825/images/rotateRight.png',
+	fullScreenImage : '/sms/20240825/images/fullScreen.png',
+	closeFromFullScreenImage : '/sms/20240825/images/closeFromFullScreen.png',
+	undoFullScreenImage : '/sms/20240825/images/undoFullScreen.png',
+	fullScreenRotateLeftImage : '/sms/20240825/images/fullScreenRotateLeft.png',
+	fullScreenRotateRightImage : '/sms/20240825/images/fullScreenRotateRight.png',
+	urlAjax : '/sms/aet/ajax',
+	txnId : '',
+	isIE8 : false,
+	isIE10Plus : false,
+	showEditDescription : false
+		,lightboxWidth : 1024,
+		lightboxHeight : 768,
+		fullscreenWidth: 1280,
+		fullscreenHeight: 960,
+		enableFullScreen: false,
+		enableSlideshow:false,
+		enableSlideshowFullScreen:false,
+		enableZoom:true
+	,coldscreen: '',
+	auctionid:''
+});
+
+    }
+
+   	function acceptCookies() 
+	{
+		var aYearFromNow = new Date();
+		aYearFromNow.setFullYear(aYearFromNow.getFullYear() + 1);
+		
+		$('cookiesAcceptedDiv').hide();
+		setCookie("cookiesAccepted_1", "Y", aYearFromNow, '/');
+	}
+
+                    addCustomZoom('zoom-target-id');
+            </script>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-ML1H9LELDC"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+
+        gtag('js', new Date());
+        gtag('config', 'G-ML1H9LELDC');
+    </script>
+        </head>
+
+        <body id="main-body-id" onLoad = "initPage();" >
+
+    <div class="modal fade" id="iframeModal" tabindex="-1" role="dialog"
+         aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true" data-bs-focus="true"
+    >
+        <div class="modal-dialog d-flex align-items-center" style="--bs-modal-width: 60rem;height: calc(100% - var(--bs-modal-margin) * 2);">
+            <div class="modal-content h-100" style="max-height: 54rem">
+                <div class="modal-body p-1 h-100">
+                    <div class="embed-responsive z-depth-1-half h-100">
+                        <iframe id="iframeiframeModal" class="embed-responsive-item w-100 h-100" src=""/></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+            
+            
+
+
+
+            <a class="skiplink" href="#startcontent" style="display:none;">
+                Skip over navigation
+            </a>
+
+            <div id="zoom-target-id" class="w-100 h-100 d-flex flex-column">
+                    <header>
+
+
+
+	
+	<div class="header">
+	<script type="text/javascript">
+		//
+		var navfuncs = {
+		 	selectApp : function(sapp) {
+		 	    if (sapp == 'gems') {
+		   			document.location.href = "http://www.publicpurchase.com" + "/gems/browse/home";
+		   		}
+		 	  	if (sapp == 'con') {
+		  			document.location.href = "http://www.publicpurchase.com" + "/contract/home/home";
+		  		} 
+				if (sapp == 'req') {
+		  			document.location.href = "http://" + "/gems/pr/home/dash";
+		  		} 
+		  		if (sapp == 'vendor') {
+		  			document.location.href = "http://www.publicpurchase.com" + "/vendor/agency/home";
+		  		}
+		  		if (sapp == 'cat') {
+		  			document.location.href = "http://" + "/gems/cat/home/dash";
+		  		}
+		  		if (sapp == 'portal') {
+		  			document.location.href = "http://www.publicpurchase.com" + "/portal/view/home";
+		  		}
+		  		if (sapp == 'surplus') {
+		  			document.location.href = "http://www.publicsurplus.com" + "/sms/browse/home";
+		  		}
+		 	}
+		 }
+	 </script>
+		 <div class="logo">
+		       <a href="javascript:navfuncs.selectApp('surplus');"><img style="width: 249px" src="/sms/20240825/images/pslogo.svg" title="Public Surplus Logo" alt="Public Surplus" border="0"/></a>
+	     </div>
+			
+    <script type="text/javascript">
+        var pslanguage = "en";
+    </script>
+
+    <div class="pb-1 d-flex justify-content-end me-2 mt-2 ms-lg-0 ms-auto mb-md-2 mb-lg-0 align-self-start language-container">
+        <div
+                id="langdiv"
+                class="ps-lang-position"
+                onmouseover="$('langlistdiv').show();"
+                onmouseout="$('langlistdiv').hide();"
+        >
+            <script type="text/javascript">
+                function base_changeLangugage(locale) {
+                    if (locale == null) { return; }
+                    new Ajax.Request('/sms/about/home.ftlh?locale='+locale, {
+                        onComplete: function() {
+                            document.location.reload();
+                        }
+                    });
+                }
+
+                function base_changeTheme(theme) {
+                    if (!theme) return;
+                    new Ajax.Request('/sms/login/changeTheme?theme=' + theme, {
+                        method: 'post',
+                        onSuccess: function() {
+                            location.reload(true);
+                        }
+                    });
+                }
+            </script>
+
+            <div class="ps-lang-menu">
+                <a class="d-flex align-items-center justify-content-between">
+                    <img style="vertical-align: top; padding-top: 2px;" alt="English" src="/sms/20240825/images/ps/en.png"/>English
+
+<i title="More Languages" data-bs-toggle="tooltip" aria-label="More Languages" data-bs-custom-class="icon-tooltip" class="bi bi-caret-down-fill small me-2" style="color: var(--ps-color-white); "></i>                </a>
+            </div>
+
+            <div id="langlistdiv" class="ps-lang-list" style="display: none;">
+                <ul class="ps-0 mb-0 py-2">
+                            <li>
+                                <a class="d-flex align-items-center justify-content-start" href="javascript:base_changeLangugage('es');"/>
+                                    <img style="vertical-align: top; padding-top: 2px;" alt="Spanish" src="/sms/20240825/images/ps/es.png"/>Spanish
+
+                                </a>
+                            </li>
+                            <li>
+                                <a class="d-flex align-items-center justify-content-start" href="javascript:base_changeLangugage('fr');"/>
+                                    <img style="vertical-align: top; padding-top: 2px;" alt="French" src="/sms/20240825/images/ps/fr.png"/>French
+
+                                </a>
+                            </li>
+                    <li>
+                        <a class="d-flex align-items-center justify-content-start" href="javascript:base_changeTheme('psmobile');">
+<i aria-hidden="true" class="bi bi-universal-access-circle me-2 pe-1" style="color: var(--ps-color-dark-blue-plus); "></i>                            WCAG
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+	
+		 </div>
+		 <div class="small header-change-theme" style="text-align: right; padding-right: 8px">
+		 </div>
+
+		<div class="small header-change-theme pb-1" style="text-align: right; padding-right: 8px">
+		</div>
+
+	
+
+
+	<nav
+		class="ps-main-bar d-flex flex-wrap navbar navbar-expand-md navbar-light py-0 mt-2 d-print-none">
+		<div class="menu-button-container d-flex d-md-none w-100 pe-2 py-2">
+			<button
+					class="navbar-toggler-menu-button navbar-toggler d-flex ms-auto"
+					type="button"
+					data-bs-toggle="collapse"
+					data-bs-target="#navbarTogglerMenu"
+					aria-controls="navbarTogglerMenu"
+					aria-expanded="false"
+					aria-label="Toggle navigation"
+			>
+				<span class="navbar-toggler-icon align-self-center"></span>
+			</button>
+		</div>
+
+		<div id="navbarTogglerMenu" class="top-menu collapse navbar-collapse h-100">
+			<div class="navbar-nav top-menu__left nav-sup-left">
+<a
+class="noborder"
+href="javascript:Auction_PopupWindow('/sms/help/onlineHelp.ftlh','onlineHelp','width=540,height=400,scrollbars=yes,resizable=yes', true);"
+>
+Chat
+<span class="ms-1 nav-bar-chat" title="Live Chat" aria-label="Live Chat" data-bs-custom-class="icon-tooltip">
+<i class="bi bi-chat-left-dots-fill" style="position: absolute; font-size: 0.92rem; color: var(--ps-color-light-blue); color: var(--ps-color-white)"></i>
+<i class="bi bi-chat-right" style="position: relative; top: -4px; left: 6px; font-size: 0.92rem; color: var(--ps-color-light-blue); color: var(--ps-color-white)"></i>
+</span></a>    <span class="d-none d-md-inline">|</span>
+<a
+href="#iframeModal"
+data-bs-toggle="modal"
+data-bs-target="#iframeModal"
+onclick="iframeModalBootstrap('iframeModal', '/sms/help/mainhelp.ftlh?frame1=public/buyer.ftlh&amp;frame2=public/buyer_stuff.ftlh');"
+>
+Help
+</a>    <span class="d-none d-md-inline">|</span>
+					<a href="javascript:loggingOut();">
+						Logout
+					</a>
+			</div>
+
+			<div class="navbar-nav top-menu__right nav-sup-right">
+				<a  href="/sms/browse/home?tm=m"
+				   target="_top" >
+					Home
+				</a>    <span class="d-none d-md-inline">|</span>
+
+				<a  href="/sms/browse/allcat?tm=m"
+				   target="_top" >
+					Browse
+				</a>    <span class="d-none d-md-inline">|</span>
+
+
+				<a  href="/sms/browse/search?tm=m"
+				   target="_top" >
+					Search
+				</a>
+    <span class="d-none d-md-inline">|</span>
+<a class="nav-sup-right-on"
+																	  href="/sms/mys/bids?tm=m"
+																	  target="_top" >
+						My&nbsp;Stuff</a>			</div>
+		</div>
+	</nav>
+
+<div class="w-100 ps-border-bottom-gross d-none d-md-block"></div>
+
+
+
+                    </header>
+
+                <main class="ps-container d-flex flex-wrap flex-column" style="flex: 1; min-height: auto">
+                    <div class="d-flex flex-wrap content-container w-100">
+                        <aside class="left-col">
+                            
+                            
+                            
+                        </aside>
+
+                        <section class="d-flex flex-column right-col" color="gray">
+                            
+                                        <div class="nav-sub flex-wrap">
+        <a href="/sms/mys/bids" class="nav-sub-on">
+                Bids
+        </a>|
+        <a href="/sms/mys/pastbids" >
+                Past&nbsp;Bids
+        </a>|
+        <a href="/sms/mys/auctionsOfInterest" >
+                Auctions of interest
+        </a>|
+        <a href="/sms/mys/watch" >
+                Watch&nbsp;List
+        </a>|
+        <a href="/sms/mys/userinfo?tm=s" >
+                Profile
+        </a>|
+        <a href="/sms/mys/inbox" >
+                Messages
+        </a>
+</div>
+
+                                
+
+                            <span id="startcontent"></span>
+
+                            
+                                    <div class="nav-sub-head">
+                                Current Bids
+                                    </div>
+                                
+
+                            
+
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+		hideLazyImagesLoadingIcon();
+	});
+
+	function hideLazyImagesLoadingIcon() {
+		const lazyImgContainers = document.querySelectorAll('.lazy-loading-container-loader');
+
+		lazyImgContainers?.forEach((container) => {
+			const lazyImg = container.querySelector('.lazy-img-loading');
+			let lazyIcon = container.querySelector('.lazy-loading-icon');
+
+			if (!lazyIcon || !lazyImg) return;
+
+			//Due to cache, the completion of image loading may occur before the 'load' event listener can be set.
+			if(lazyImg.complete) {
+				lazyIcon.style = 'display: none';
+				return;
+			}
+
+			lazyImg.onerror = function() {
+				lazyIcon.style = 'display: none';
+			}
+
+			lazyImg.addEventListener('load', function() {
+				lazyIcon.style = 'display: none';
+			});
+		});
+		loadInfoIcon();
+	}
+
+	function loadInfoIcon() {
+		document.querySelectorAll('[id^="bi_"]').forEach(infoIcon => {
+			let popoverIcon = new bootstrap.Popover(infoIcon, {
+				html : true,
+				trigger: 'focus hover',
+				delay: { "hide": 100 }, // Used to allow a click on the icon's anchor.
+				sanitize: false,
+				content: function() {
+					return document.querySelector(infoIcon.getAttribute("data-popover-content")).innerHTML;
+				}
+			});
+			infoIcon.addEventListener('shown.bs.popover', () => {
+				popoverIcon.tip.getElementsBySelector('[data-bs-custom-class="icon-tooltip"]').forEach(icon => {
+					activateIconTooltip(icon);
+				});
+			});
+			infoIcon.addEventListener('hide.bs.popover', () => {
+				popoverIcon.tip.getElementsBySelector('[data-bs-custom-class="icon-tooltip"]').forEach(icon => {
+					disposeIconTooltip(icon);
+				});
+			});
+		});
+	}
+	</script>
+
+    <div class="mt-auto">
+	<span class="ps-2">
+		View
+		<button class="ps-button text-center ps-2" color="link" type="button" onclick="toggleAuctionGridView({ view: 'g', tab:'mys', saveViewMode: 'true' });">
+<i title="Grid view" data-bs-toggle="tooltip" aria-label="Grid view" data-bs-custom-class="icon-tooltip" class="bi bi-grid " style="color: var(--ps-color-gray); "></i>		</button>
+		<button class="ps-button text-center px-2" color="link" type="button" onclick="toggleAuctionGridView({ view: 'l', tab:'mys', saveViewMode: 'true' });">
+<i title="List view" data-bs-toggle="tooltip" aria-label="List view" data-bs-custom-class="icon-tooltip" class="bi bi-list " style="color: var(--ps-color-gray); "></i>		</button>
+	</span>
+    </div>
+        <div class="me-col">
+
+        </div>
+
+                        </section>
+                    </div>
+
+                    
+                            <section class="w-100 wide-content-container">
+                        
+                            <div class="sep-table w-100">
+                            </div>
+                        
+
+    <form action="/sms/mys/bids" name="theform" method="GET">
+        <input type="hidden" name="page"
+               value="0"/>
+        <input type="hidden" name="showaucpct" value=""/>
+    </form>
+
+    <div id="auctionGridViewCurrent" class="w-100" style="display: none">
+        <div class="header-wide-section" color="blue"></div>
+            <div class="px-3">
+		<div class="mb-2 auction-items__container" id="auction_item">
+			<section class="w-100 ps-card-feat"  id="auctionsListContainer">
+
+
+				<div class="auction-item" id="4005533currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4005533"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4005533/64681859"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4005533currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4005533"
+								title="#4005533 -  HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!"
+							>
+								#4005533 -  HP Z2 Mini G9 Workstation
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4005533currGrid">
+										$293.00
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4005533currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4005533currGrid" class="">
+					2 days 9 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4005533, "4005533currGrid",
+				1778914932882, 1779123600000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4005548currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4005548"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4005548/68544375"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4005548currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4005548"
+								title="#4005548 - HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 32GB RAM - Free Shipping!"
+							>
+								#4005548 - HP ZBook Fury 15.6 G8 Laptop
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4005548currGrid">
+										$305.00
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4005548currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4005548currGrid" class="">
+					2 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4005548, "4005548currGrid",
+				1778914932882, 1779134400000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4006573currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4006573"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4006573/64681859"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4006573currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4006573"
+								title="#4006573 -  HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!"
+							>
+								#4006573 -  HP Z2 Mini G9 Workstation
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4006573currGrid">
+										$247.50
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4006573currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4006573currGrid" class="">
+					3 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006573, "4006573currGrid",
+				1778914932882, 1779213600000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4006574currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4006574"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4006574/60759737"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4006574currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4006574"
+								title="#4006574 - HP EliteDesk 800 G9 Desktop Mini i7-12700T 16GB Ram - Free Shipping!"
+							>
+								#4006574 - HP EliteDesk 800 G9 Desktop Mi...
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4006574currGrid">
+										$180.50
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4006574currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4006574currGrid" class="">
+					3 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006574, "4006574currGrid",
+				1778914932882, 1779213600000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4006590currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4006590"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4006590/68544375"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4006590currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4006590"
+								title="#4006590 - HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 16GB RAM - Free Shipping!"
+							>
+								#4006590 - HP ZBook Fury 15.6 G8 Laptop
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4006590currGrid">
+										$168.50
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4006590currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4006590currGrid" class="">
+					3 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006590, "4006590currGrid",
+				1778914932882, 1779220800000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4003162currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4003162"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4003162/69788459"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4003162currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4003162"
+								title="#4003162 - 1 LOT OF 3 HP Z2 COMPUTERS"
+							>
+								#4003162 - 1 LOT OF 3 HP Z2 COMPUTERS
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4003162currGrid">
+										$255.00
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4003162currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4003162currGrid" class="">
+					4 days 6 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003162, "4003162currGrid",
+				1778914932882, 1779285600000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4003167currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4003167"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4003167/69788599"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4003167currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4003167"
+								title="#4003167 - 1 LOT OF 4 LAPTOPS"
+							>
+								#4003167 - 1 LOT OF 4 LAPTOPS
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4003167currGrid">
+										$425.00
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4003167currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4003167currGrid" class="">
+					4 days 7 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003167, "4003167currGrid",
+				1778914932882, 1779287400000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4007527currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4007527"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4007527/64681859"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4007527currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4007527"
+								title="#4007527 -  HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!"
+							>
+								#4007527 -  HP Z2 Mini G9 Workstation
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4007527currGrid">
+										$178.07
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4007527currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4007527currGrid" class="">
+					4 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007527, "4007527currGrid",
+				1778914932882, 1779300000000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4007542currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4007542"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4007542/68544375"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4007542currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4007542"
+								title="#4007542 - HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 16GB RAM - Free Shipping!"
+							>
+								#4007542 - HP ZBook Fury 15.6 G8 Laptop
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4007542currGrid">
+										$163.02
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4007542currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4007542currGrid" class="">
+					4 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007542, "4007542currGrid",
+				1778914932882, 1779307200000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4007545currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4007545"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4007545/68203246"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4007545currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4007545"
+								title="#4007545 - HP EliteBook 1040 G9 14 inch 2-in-1 Laptop i7-1265U 16GB RAM - Free Shipping!"
+							>
+								#4007545 - HP EliteBook 1040 G9 14 inch 2-in-1
+							</a>
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4007545currGrid">
+										$201.50
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4007545currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4007545currGrid" class="">
+					4 days 13 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007545, "4007545currGrid",
+				1778914932882, 1779310800000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+
+
+				<div class="auction-item" id="4003355currGrid">
+					<div class="auction-item-img">
+						<a
+								href="/sms/auction/view?auc=4003355"
+						>
+								<div class="position-relative lazy-loading-container lazy-loading-container-loader">
+									<img
+										class="lazy-img-loading"
+										loading="lazy"
+										src="https://d37qv0n5b4mbzm.cloudfront.net/sms/docviewer/cdnmainaucdoc/thumb-b/4003355/69792251"
+										alt="View Images"
+									/>
+<div class="loading-spinner lazy-loading-icon" style="" role="status" aria-hidden="true">
+<div class="load-spinner__roller">
+<div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div><div><div></div></div>
+</div>
+</div>								</div>
+						</a>
+						<span class="auction-item-state">
+							
+						</span>
+					</div>
+					<div class="auction-item-body px-0">
+						<div id="ai_4003355currGrid" class="hidden">
+							<div class="d-flex align-items-center">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="" WIDTH="14" HEIGHT="13" />
+
+							</div>
+						</div>
+
+						<h6 class="w-100 card-title ps-card-feat__body--title ps-1 mb-2">
+							<a
+									href="/sms/auction/view?auc=4003355"
+								title="#4003355 - 1 LOT OF 5 HP PROBOOKS"
+							>
+								#4003355 - 1 LOT OF 5 HP PROBOOKS
+							</a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="" style="width: 0.75rem; height: 0.75rem" WIDTH="14" HEIGHT="13" />
+
+						</h6>
+
+						<div class="w-100 ps-card__body--children px-1">
+								Price:
+								<b id="val_4003355currGrid">
+										$495.00
+								</b>
+								<br/>
+
+								<div class="fw-bold">
+	<div id="timeLeft4003355currGrid" class="d-inline w-100 auction-time_left">
+			<label class="text-nowrap w-auto align-self-center fw-normal">
+				Time Left:
+			</label>
+			<span id="timeLeftValue4003355currGrid" class="">
+					9 days 7 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003355, "4003355currGrid",
+				1778914932882, 1779721200000, 0, "",
+				"", "currList" );
+		</script>
+								</div>
+						</div>
+
+						<div id="buttons" class="d-flex w-100 justify-content-end align-items-center mt-auto">
+						</div>
+					</div>
+				</div>
+			</section>
+		</div>
+            </div>
+    </div>
+
+    <div id="auctionListViewCurrent" class="w-100" >
+        <table id="auctionTableView" class="ps-table table table-responsive-md ">
+            <thead>
+                <tr>
+                    <th scope="col">Auction</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">&nbsp;</th>
+                    <th nowrap scope="col">Time Left</th>
+                        <td class="show-auc-pct" style="display:none"></td>
+                    <th scope="col">Current Price</th>
+                    <th scope="col">Bid</th>
+                    <th nowrap scope="col">Proxy Bid</th>
+                    <th scope="col">Qty.</th>
+                </tr>
+            </thead>
+            <tbody>
+	<tr id="4005533currList">
+		<td>4005533</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4005533"> HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4005533"
+        rel="-ajax-lightbox-4005533"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4005533currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4005533currList" class="">
+					2 days 9 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4005533, "4005533currList",
+				1778914932882, 1779123600000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4005533currList" class="text-end">$293.00&nbsp;</td>
+		<td class="text-end">$293.00&nbsp;</td>
+		<td class="text-end">$350.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4005548currList">
+		<td>4005548</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4005548">HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 32GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4005548"
+        rel="-ajax-lightbox-4005548"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4005548currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4005548currList" class="">
+					2 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4005548, "4005548currList",
+				1778914932882, 1779134400000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4005548currList" class="text-end">$305.00&nbsp;</td>
+		<td class="text-end">$305.00&nbsp;</td>
+		<td class="text-end">$399.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4006573currList">
+		<td>4006573</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4006573"> HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4006573"
+        rel="-ajax-lightbox-4006573"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4006573currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4006573currList" class="">
+					3 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006573, "4006573currList",
+				1778914932882, 1779213600000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4006573currList" class="text-end">$247.50&nbsp;</td>
+		<td class="text-end">$247.50&nbsp;</td>
+		<td class="text-end">$399.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4006574currList">
+		<td>4006574</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4006574">HP EliteDesk 800 G9 Desktop Mini i7-12700T 16GB Ram - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4006574"
+        rel="-ajax-lightbox-4006574"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4006574currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4006574currList" class="">
+					3 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006574, "4006574currList",
+				1778914932882, 1779213600000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4006574currList" class="text-end">$180.50&nbsp;</td>
+		<td class="text-end">$180.50&nbsp;</td>
+		<td class="text-end">$199.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4006590currList">
+		<td>4006590</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4006590">HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 16GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4006590"
+        rel="-ajax-lightbox-4006590"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4006590currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4006590currList" class="">
+					3 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4006590, "4006590currList",
+				1778914932882, 1779220800000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4006590currList" class="text-end">$168.50&nbsp;</td>
+		<td class="text-end">$168.50&nbsp;</td>
+		<td class="text-end">$199.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4003162currList">
+		<td>4003162</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4003162">1 LOT OF 3 HP Z2 COMPUTERS</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4003162"
+        rel="-ajax-lightbox-4003162"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4003162currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4003162currList" class="">
+					4 days 6 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003162, "4003162currList",
+				1778914932882, 1779285600000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4003162currList" class="text-end">$255.00&nbsp;</td>
+		<td class="text-end">$255.00&nbsp;</td>
+		<td class="text-end">$255.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4003167currList">
+		<td>4003167</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4003167">1 LOT OF 4 LAPTOPS</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4003167"
+        rel="-ajax-lightbox-4003167"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4003167currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4003167currList" class="">
+					4 days 7 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003167, "4003167currList",
+				1778914932882, 1779287400000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4003167currList" class="text-end">$425.00&nbsp;</td>
+		<td class="text-end">$425.00&nbsp;</td>
+		<td class="text-end">$499.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4007527currList">
+		<td>4007527</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4007527"> HP Z2 Mini G9 Workstation i7-12700 16GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4007527"
+        rel="-ajax-lightbox-4007527"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4007527currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4007527currList" class="">
+					4 days 10 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007527, "4007527currList",
+				1778914932882, 1779300000000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4007527currList" class="text-end">$178.07&nbsp;</td>
+		<td class="text-end">$178.07&nbsp;</td>
+		<td class="text-end">$199.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4007542currList">
+		<td>4007542</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4007542">HP ZBook Fury 15.6 G8 Laptop i7-11850H 2.5 GHz 16GB RAM - Free Shipping!</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4007542"
+        rel="-ajax-lightbox-4007542"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4007542currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4007542currList" class="">
+					4 days 12 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007542, "4007542currList",
+				1778914932882, 1779307200000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4007542currList" class="text-end">$163.02&nbsp;</td>
+		<td class="text-end">$163.02&nbsp;</td>
+		<td class="text-end">$250.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4007545currList">
+		<td>4007545</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4007545">HP EliteBook 1040 G9 14 inch 2-in-1 Laptop i7-1265U 16GB RAM - Free Shipping!</a>
+			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4007545"
+        rel="-ajax-lightbox-4007545"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4007545currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4007545currList" class="">
+					4 days 13 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4007545, "4007545currList",
+				1778914932882, 1779310800000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4007545currList" class="text-end">$201.50&nbsp;</td>
+		<td class="text-end">$199.00&nbsp;</td>
+		<td class="text-end">$199.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+	<tr id="4003355currList">
+		<td>4003355</td>
+		<td class="text-start">
+			<a href="/sms/auction/view?auc=4003355">1 LOT OF 5 HP PROBOOKS</a>
+<img src="/sms/20240825/images/auction/winning.gif" title="Winning" alt="Winning" data-bs-toggle="tooltip" data-bs-custom-class="icon-tooltip" class="ms-2" style="" WIDTH="14" HEIGHT="13" />			&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		</td>
+		<td class="text-center">
+    <a href="/sms/auction/ajaxpicloader?auctionId=4003355"
+        rel="-ajax-lightbox-4003355"
+        onClick="alert('Please wait for the page to complete loading and try again.'); event.preventDefault();"
+    >
+<i aria-hidden="true" class="bi bi-camera-fill " style="color: var(--ps-color-gray); "></i>    </a>
+
+		</td>
+		<td nowrap>
+	<div id="timeLeft4003355currList" class="d-inline w-100 auction-time_left">
+			<span id="timeLeftValue4003355currList" class="">
+					9 days 7 hours
+			</span>
+	</div>
+
+		<script>
+			updateTimeLeftSpan(timeLeftInfoMap, 4003355, "4003355currList",
+				1778914932882, 1779721200000, 0, "",
+				"", "currGrid" );
+		</script>
+		</td>
+			<td class="show-auc-pct" style="display:none"></td>
+		<td id="val_4003355currList" class="text-end">$495.00&nbsp;</td>
+		<td class="text-end">$495.00&nbsp;</td>
+		<td class="text-end">$499.00&nbsp;</td>
+		<td class="text-end">
+			&nbsp;
+		</td>
+	</tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <div class="w-100">
+
+    </div>
+
+
+
+                            </section>
+                        
+                </main>
+
+                    <footer>
+                        <div style="clear:left;">
+    <div class="d-none d-md-flex ps-border-top-gross d-print-none"></div>
+
+    <div class="d-none d-md-flex ps-main-bar d-print-none">
+        <div class="left-sidebar"></div>
+        <div class="right-sidebar"></div>
+    </div>
+
+    <div class="ps-footer-line-slim d-md-none d-print-none"></div>
+
+    <div class="d-flex justify-content-center flex-wrap ps-footer-info mt-3 d-print-none">
+        Customer Support:&nbsp            <a href="mailto:support@publicsurplus.com">support@publicsurplus.com</a>
+         |
+
+        Copyright 1999-2026 The Public Group, LLC.
+            |
+        All rights reserved. 
+    </div>
+
+    <div class="d-flex justify-content-center pt-2">
+        <img src="/sms/20240825/images/logoGroup_footer.png"
+                                          alt="The Public Group"/>
+    </div>
+</div>
+                    </footer>
+            </div>
+
+<div style='width:100%; display: none;' id="cookiesAcceptedDiv">
+    <div class="message-container">
+        <h2>
+            This website uses cookies to ensure you get the best experience on our website. Please accept cookies for optimal performance.
+        </h2>
+    </div>
+    <div class="container-button">
+        <button type="button" class="ps-button" color="light" onclick="acceptCookies();">
+            Yes, I Accept Cookies
+        </button>
+        <button
+                class="ps-button mx-4" color="link"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#iframeModal"
+                onclick="iframeModalBootstrap('iframeModal', '/sms/help/public/privacy.html');"
+        >
+            [
+            Public Surplus Privacy Policy
+            ]
+        </button>
+        <button
+                class="ps-button" color="link"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#iframeModal"
+                onclick="iframeModalBootstrap('iframeModal', '/sms/help/public/info_cookies.ftlh');"
+        >
+            [
+            How to manage the cookies
+            ]
+        </button>
+    </div>
+</div>
+
+        </body>
+
+        <script type="text/javascript">
+            function hideIconTooltip(icon){
+		var tooltip = bootstrap.Tooltip.getInstance(icon);
+		if(tooltip) {
+			tooltip.hide();
+		}
+	}
+
+	function disposeIconTooltip(icon){
+		var tooltip = bootstrap.Tooltip.getInstance(icon);
+		if(tooltip) {
+			tooltip.dispose();
+		}
+	}
+
+	function reactivateTooltipAfterIconChange(icon) {
+		var parent = icon.parentElement;
+		if (parent && parent.tagName === 'BUTTON') {
+			//if the tooltip is visible, the tooltip is hidden before changing the current icon
+			parent.addEventListener("click", (event) => hideIconTooltip(icon));
+			//after call ajax function, detects if there is a change in the button icon and reactivates the tooltip on the new icon
+			var observer = new MutationObserver(function(mutationsList, observer) {
+				mutationsList.forEach(mutation => {
+					if (mutation.type === 'childList') {
+						var newIcon = parent.querySelector('[data-bs-custom-class*="icon-tooltip"]');
+						bootstrap.Tooltip.getOrCreateInstance(newIcon);
+						parent.addEventListener("click", (event) => hideIconTooltip(newIcon));
+					}
+				});
+			});
+			var config = { childList: true };
+			observer.observe(parent, config);
+		} else if (parent) {
+			icon.addEventListener("click", (event) => hideIconTooltip(icon));
+		}
+	}
+
+	function activateIconTooltips() {
+		document.querySelectorAll('[data-bs-custom-class*="icon-tooltip"]').forEach(icon => {
+			activateIconTooltip(icon);
+		});
+	}
+
+	function activateIconTooltip(icon) {
+		bootstrap.Tooltip.getOrCreateInstance(icon);
+		reactivateTooltipAfterIconChange(icon);
+	}
+
+	if (document.addEventListener) {
+		document.addEventListener("DOMContentLoaded", (event) => {
+			activateIconTooltips();
+		});
+	}
+        </script>
+    </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

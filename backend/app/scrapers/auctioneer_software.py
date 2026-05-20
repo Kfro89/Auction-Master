@@ -2,13 +2,49 @@ import re
 import json
 import httpx
 import asyncio
-from typing import List, Dict, Any, Tuple
+import logging
+from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime, timezone
 from .base import BaseScraper
+from app.schemas.scraping import ScrapedAuction, ScrapedLot, ScrapedBid
 
-class AuctioneerSoftwareScraper(BaseScraper):
+logger = logging.getLogger(__name__)
+
+def parse_date(date_val: Any) -> Optional[datetime]:
+    if not date_val:
+        return None
+    try:
+        if isinstance(date_val, (int, float)):
+            # If it's a large number, it's likely milliseconds
+            if date_val > 1e11:
+                return datetime.fromtimestamp(date_val / 1000.0, tz=timezone.utc)
+            return datetime.fromtimestamp(date_val, tz=timezone.utc)
+        if isinstance(date_val, str):
+            # Handle ISO strings
+            dt = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+    except Exception:
+        pass
+    return None
+
+def parse_price(val: Any) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val.replace('$', '').replace(',', '').strip())
+        except ValueError:
+            return 0.0
+    return 0.0
+
+class AuctioneerSoftwareBaseScraper(BaseScraper):
     """
-    Multi-tenant scraper for the Auctioneer Software platform.
-    Supports Whitley Auction (rmeb) and Roller Auction (rol).
+    Base scraper for the Auctioneer Software platform.
+    Provides common logic for Apollo state extraction and lot discovery.
     """
 
     def __init__(self, base_url: str, website_key: str):
@@ -54,7 +90,46 @@ class AuctioneerSoftwareScraper(BaseScraper):
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse __APOLLO_STATE__ JSON: {e}")
 
-    async def discover_active_auctions(self) -> List[Dict[str, Any]]:
+    def _extract_redux_data(self, html: str) -> Dict[str, Any]:
+        """
+        Extracts the window.REDUX_DATA JSON object from the HTML source.
+        """
+        pattern = re.compile(r'window\.REDUX_DATA\s*=\s*(\{.*?\});\s*</script>', re.DOTALL)
+        match = pattern.search(html)
+        if not match:
+            return {}
+        
+        json_str = match.group(1).strip()
+        if json_str.endswith(";"):
+            json_str = json_str[:-1]
+        
+        # In JavaScript, undefined might be present, which is invalid JSON.
+        json_str = json_str.replace(":undefined", ":null")
+        
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse REDUX_DATA JSON: {e}")
+            return {}
+
+    def _get_image_url(self, img_obj: Any) -> Optional[str]:
+        if not img_obj:
+            return None
+        url = None
+        if isinstance(img_obj, str):
+            url = img_obj
+        elif isinstance(img_obj, dict):
+            # Try various common fields for Auctioneer Software
+            for field in ["url", "original_url", "large_url", "medium_url", "src"]:
+                if img_obj.get(field):
+                    url = img_obj.get(field)
+                    break
+        
+        if url and not url.startswith("http"):
+            url = f"{self.base_url}{url}" if url.startswith("/") else f"{self.base_url}/{url}"
+        return url
+
+    async def discover_active_auctions(self) -> List[ScrapedAuction]:
         """
         Fetch the auction calendar or homepage to extract active auctions.
         """
@@ -82,14 +157,16 @@ class AuctioneerSoftwareScraper(BaseScraper):
             if key.startswith("Auction."):
                 auction_id = key.split(".")[1]
                 if isinstance(value, dict):
-                    auction_data = value.copy()
-                    if 'id' not in auction_data:
-                        auction_data['id'] = auction_id
-                    auctions.append(auction_data)
+                    auctions.append(ScrapedAuction(
+                        id=auction_id,
+                        name=value.get("name") or value.get("title") or "Unknown Auction",
+                        start_time=parse_date(value.get("starts_at") or value.get("startsAt")),
+                        end_time=parse_date(value.get("ends_at") or value.get("endsAt"))
+                    ))
                 
         return auctions
 
-    async def fetch_auction_lots(self, auction_id: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    async def fetch_auction_lots(self, auction_id: str) -> Tuple[ScrapedAuction, List[ScrapedLot]]:
         """
         Fetch all lots for a specific auction by iterating through pagination.
         """
@@ -98,23 +175,29 @@ class AuctioneerSoftwareScraper(BaseScraper):
         response.raise_for_status()
         
         first_page_state = self._extract_apollo_state(response.text)
-        auction_metadata = first_page_state.get(f"Auction.{auction_id}", {})
+        auction_metadata_raw = first_page_state.get(f"Auction.{auction_id}", {})
         
-        total_lots = auction_metadata.get("front_visible_lot_count")
+        auction_metadata = ScrapedAuction(
+            id=auction_id,
+            name=auction_metadata_raw.get("name") or auction_metadata_raw.get("title") or "Unknown Auction",
+            start_time=parse_date(auction_metadata_raw.get("starts_at") or auction_metadata_raw.get("startsAt")),
+            end_time=parse_date(auction_metadata_raw.get("ends_at") or auction_metadata_raw.get("endsAt"))
+        )
+        
+        total_lots = auction_metadata_raw.get("front_visible_lot_count")
         if total_lots is None:
             # Fallback: if we can't find the count, just return the first page
-            lots = self._extract_lots_from_state(first_page_state)
+            lots = self._extract_lots_from_state(first_page_state, auction_id)
             return auction_metadata, lots
             
         all_lots_dict = {} # Use dict to avoid duplicates by ID
         
         # Add first page lots
-        for lot in self._extract_lots_from_state(first_page_state):
-            all_lots_dict[lot['id']] = lot
+        for lot in self._extract_lots_from_state(first_page_state, auction_id):
+            all_lots_dict[lot.id] = lot
             
         # Determine how many pages we need. 
         # The default pageSize seems to be 50 from our metadata inspection.
-        page_size = 50
         current_page = 2
         
         while len(all_lots_dict) < total_lots:
@@ -129,13 +212,13 @@ class AuctioneerSoftwareScraper(BaseScraper):
                 response.raise_for_status()
                 
                 page_state = self._extract_apollo_state(response.text)
-                new_lots = self._extract_lots_from_state(page_state)
+                new_lots = self._extract_lots_from_state(page_state, auction_id)
                 
                 if not new_lots:
                     break # No more lots found
                     
                 for lot in new_lots:
-                    all_lots_dict[lot['id']] = lot
+                    all_lots_dict[lot.id] = lot
                     
                 current_page += 1
             except Exception as e:
@@ -144,7 +227,7 @@ class AuctioneerSoftwareScraper(BaseScraper):
                 
         return auction_metadata, list(all_lots_dict.values())
 
-    def _extract_lots_from_state(self, state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _extract_lots_from_state(self, state: Dict[str, Any], auction_id: str = None) -> List[ScrapedLot]:
         lots = []
         for key, value in state.items():
             if key.startswith("AuctionLot."):
@@ -174,7 +257,25 @@ class AuctioneerSoftwareScraper(BaseScraper):
                                 resolved_imgs.append(img_ref)
                         lot_data["images"] = resolved_imgs
 
-                    lots.append(lot_data)
+                    # Determine image_url
+                    image_url = self._get_image_url(lot_data.get("primary_image"))
+                    if not image_url and lot_data.get("images"):
+                        image_url = self._get_image_url(lot_data["images"][0])
+                    
+                    # Use provided auction_id or try to find it in lot_data
+                    actual_auction_id = auction_id or lot_data.get("auction_id") or lot_data.get("auctionId")
+                    lot_url = f"{self.base_url}/auctions/{actual_auction_id}/lot/{lot_id}" if actual_auction_id else None
+
+                    lots.append(ScrapedLot(
+                        id=lot_id,
+                        lot_number=str(lot_data.get("lot_number") or lot_data.get("lotNumber") or ""),
+                        title=lot_data.get("title") or "Unknown Lot",
+                        description=lot_data.get("description"),
+                        url=lot_url,
+                        image_url=image_url,
+                        current_bid=parse_price(lot_data.get("current_bid") or lot_data.get("high_bid") or lot_data.get("high_bid_amount") or 0.0),
+                        end_time=parse_date(lot_data.get("ends_at") or lot_data.get("endsAt"))
+                    ))
         return lots
 
     async def health_check(self) -> bool:
@@ -195,74 +296,8 @@ class AuctioneerSoftwareScraper(BaseScraper):
             
         raise NotImplementedError("Standard HTTP login not implemented yet. Use session cookie bypass.")
 
-    async def fetch_my_bidder_id(self) -> str:
-        """
-        Attempts to extract the logged-in user's Bidder Number from the Apollo State.
-        """
-        if not self.client.cookies:
-            return None
-            
-        try:
-            for attempt in range(3):
-                try:
-                    response = await self.client.get(f"{self.base_url}/")
-                    response.raise_for_status()
-                    break
-                except Exception as e:
-                    if attempt == 2:
-                        raise
-                    await asyncio.sleep(2)
-            
-            state = self._extract_apollo_state(response.text)
-            
-            # 1. Look for currentUser to get the ID
-            root = state.get("ROOT_QUERY", {})
-            user_ref = None
-            for k, v in root.items():
-                if ("currentUser" in k or "me" in k or "viewer" in k) and isinstance(v, dict) and "__ref" in v:
-                    user_ref = v["__ref"]
-                    break
-                    
-            if user_ref and user_ref in state:
-                user_obj = state[user_ref]
-                return str(user_obj.get("bidderNumber") or user_obj.get("id") or user_ref.split(":")[1])
-                
-            # 2. Fallback: Search all User objects
-            for key, value in state.items():
-                if key.startswith("User:") and isinstance(value, dict):
-                    if "bidderNumber" in value and value["bidderNumber"]:
-                        return str(value["bidderNumber"])
-                    if "id" in value and value["id"]:
-                        return str(value["id"])
-                        
-        except Exception as e:
-            print(f"Failed to extract bidder ID from {self.base_url} state:", e)
-            
-        return None
-
-    async def place_bid(self, auction_id: str, lot_number: str, amount: float) -> Dict[str, Any]:
-        """
-        Submit a bid to the platform.
-        """
-        # We check if we have cookies set on the client
-        if not self.client.cookies:
-            raise PermissionError("Not authenticated. Call login() first.")
-            
-        raise NotImplementedError("Direct bidding structure not fully mapped for Auctioneer Software yet.")
-
-    async def fetch_lot_image(self, auction_id: str, lot_id: str) -> str:
-        url = f"{self.base_url}/auctions/{auction_id}/lot/{lot_id}"
-        resp = await self.client.get(url)
-        if resp.status_code == 200:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            img_tag = soup.select_one('img.lot-image, .lot-details-gallery img, [property="og:image"]')
-            if img_tag:
-                url = img_tag.get('src') or img_tag.get('content')
-                if url and not url.startswith('http'):
-                    url = self.base_url + url
-                return url
-        return None
-
     async def close(self):
         await self.client.aclose()
+
+# Backward compatibility alias
+AuctioneerSoftwareScraper = AuctioneerSoftwareBaseScraper

@@ -9,13 +9,13 @@ from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 
 from ..database import get_db, SessionLocal
-from ..services.discovery import discover_auctioneer_software, discover_public_surplus, discover_bidwrangler, discover_govdeals
+from ..services.research_service import discover_auctioneer_software, discover_public_surplus, discover_bidwrangler, discover_govdeals
 from ..services.pipeline import run_full_ingestion_pipeline
-from ..models import Item, AuctionHouse, EbaySampleCache, Valuation, Setting, UserBidActivity
+from ..models import AuctionHouse, EbaySampleCache, Valuation, Setting
 from ..services.ebay_auth import EbayAuthClient
 from ..services.ebay_browse import EbayBrowseClient
 from ..services.ebay_store import EbayStoreClient
-from ..services.valuation import calculate_valuation, run_item_valuation
+from ..services.valuation import calculate_valuation
 from ..services.bid_sync import sync_active_bids
 from ..auth import get_current_user
 from ..services.security import encrypt_value, decrypt_value
@@ -118,7 +118,6 @@ async def verify_login(website_key: str, db: Session = Depends(get_db), current_
         if not authenticated:
             raise HTTPException(status_code=401, detail="Authentication failed")
             
-        # Optional: Further verification
         # For GovDeals, we MUST use the bidder id to verify the session
         if website_key == "govdeals":
             bidder_id_setting = db.query(Setting).filter(Setting.key == "govdeals_bidder_id").first()
@@ -130,7 +129,6 @@ async def verify_login(website_key: str, db: Session = Depends(get_db), current_
                     logger.error(f"GovDeals bid verification failed: {e}")
                     raise HTTPException(status_code=401, detail=f"Session invalid or expired: {e}")
             else:
-                # Even if we can't fetch bids, the login() method succeeded (it's pseudo-auth)
                 return {"status": "success", "message": "Cookie applied, but Bidder ID missing for full verification."}
         
         # For Public Surplus, try fetching bids
@@ -213,12 +211,10 @@ async def run_all_scrapes():
     db = SessionLocal()
     try:
         def update_job_status(status_payload: dict):
-            # Update the global ACTIVE_JOBS dict with keys from the payload
             for key, value in status_payload.items():
                 if key in ACTIVE_JOBS["scrape"]:
                     ACTIVE_JOBS["scrape"][key] = value
                 else:
-                    # Allow dynamic extension if payload has new useful keys
                     ACTIVE_JOBS["scrape"][key] = value
         
         await run_full_ingestion_pipeline(db, update_status_callback=update_job_status)
@@ -227,23 +223,16 @@ async def run_all_scrapes():
         ACTIVE_JOBS["scrape"]["message"] = f"Critical error: {str(e)}"
     finally:
         ACTIVE_JOBS["scrape"]["status"] = "idle"
-        # Preserve the final completion message set by the pipeline
         db.close()
 
 @router.post("/valuate/{item_id}")
 async def valuate_item(item_id: int, type: str = "research", target_roi: float = 0.30, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     try:
-        from ..models import ResearchItem, BidItem, Item
-        model_class = {"research": ResearchItem, "bid": BidItem, "item": Item}.get(type, ResearchItem)
+        from ..models import ResearchItem, BidItem
+        model_class = {"research": ResearchItem, "bid": BidItem}.get(type, ResearchItem)
         
-        # Note: run_item_valuation needs to be updated to support model_class or we use the background task's logic
-        # For simplicity in this refactor, we'll use the background valuate logic synchronously if needed, 
-        # but run_item_valuation currently only takes item_id and assumes Item.
-        
-        # Let's use the background worker's logic which is already polymorphic
         from ..services.valuation_worker import valuate_item_background
         
-        # We need the house premium
         item = db.query(model_class).get(item_id)
         if not item:
             raise HTTPException(status_code=404, detail=f"{type} item not found")
@@ -253,23 +242,33 @@ async def valuate_item(item_id: int, type: str = "research", target_roi: float =
         
         await valuate_item_background(item_id, premium, target_roi, model_name=model_class.__name__)
         
-        # Refetch
         db.refresh(item)
         
         if type == "research":
             from .research import serialize_research_item
             serialized = serialize_research_item(item)
-        elif type == "bid":
+        else:
             from .bidding import serialize_bid_item
             serialized = serialize_bid_item(item)
-        else:
-            from .items import serialize_item
-            serialized = serialize_item(item)
             
         return serialized.get("valuation")
     except Exception as e:
         logger.error(f"Valuation error for item {item_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class BulkValuateRequest(BaseModel):
+    mode: str 
+    target_roi: float = 0.30
+
+@router.post("/valuate-bulk")
+async def valuate_bulk(req: BulkValuateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    from ..services.valuation_worker import process_pending_valuations
+    
+    async def run_bulk():
+        await process_pending_valuations(SessionLocal(), batch_size=100)
+        
+    background_tasks.add_task(run_bulk)
+    return {"status": "started"}
 
 @router.post("/refresh-active-bids")
 async def refresh_active_bids(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):

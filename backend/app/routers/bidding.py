@@ -48,8 +48,13 @@ def serialize_bid_item(item: BidItem) -> dict:
         "category": item.category,
         "product_name": item.product_name,
         "condition": item.condition,
-        "tags": item.tags,
+        "tags": item.tags if isinstance(item.tags, list) else [],
         "is_hidden_from_active": getattr(item, 'is_hidden_from_active', False),
+        "vin": item.vin,
+        "vehicle_year": item.vehicle_year,
+        "vehicle_make": item.vehicle_make,
+        "vehicle_model": item.vehicle_model,
+        "vehicle_trim": item.vehicle_trim,
         "valuation": None,
         "user_bids": {
             "current_bid_amount": item.current_bid_amount,
@@ -115,7 +120,6 @@ async def claim_won_bid(item_id: int, db: Session = Depends(get_db), current_use
 
     # 1. Create Parent Lot
     parent_lot = InventoryParentLot(
-        source_item_id=None, # Decoupled from old Item
         title=bid_item.title,
         hammer_price=bid_item.current_bid_amount,
         buyer_premium_pct=bid_item.auction_house.buyer_premium_pct if bid_item.auction_house else 0.15,
@@ -132,7 +136,7 @@ async def claim_won_bid(item_id: int, db: Session = Depends(get_db), current_use
         condition=bid_item.condition,
         buy_price=bid_item.current_bid_amount,
         images=bid_item.images,
-        status='staged'
+        status='WON'
     )
     db.add(inv_item)
     

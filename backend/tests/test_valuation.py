@@ -30,8 +30,8 @@ def test_calculate_valuation_success():
     # Trimmed median should be very close to 100
     assert 98 <= result["trimmed_median"] <= 102
     
-    # 0.75 haircut
-    expected_est_market_value = result["trimmed_median"] * 0.75
+    # No haircut
+    expected_est_market_value = result["trimmed_median"]
     assert math.isclose(result["est_market_value"], expected_est_market_value, rel_tol=1e-5)
     
     # Total Cost = Max Bid * (1 + Auction Premium %)

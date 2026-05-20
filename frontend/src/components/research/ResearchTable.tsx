@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   useReactTable,
@@ -19,7 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { CountdownBadge } from "./CountdownBadge"
 import { ResearchRowActions } from "./ResearchRowActions"
 import { ResearchFilters } from "./ResearchFilters"
-import { ItemDetailSheet } from "./ItemDetailSheet"
+import { ResearchGrid } from "./ResearchGrid"
+import { ItemDetailModal } from "./ItemDetailModal"
 import { Money } from "@/components/common/Money"
 import { Percent } from "@/components/common/Percent"
 import { EmptyState } from "@/components/common/EmptyState"
@@ -38,31 +39,68 @@ export function ResearchTableSkeleton() {
 }
 
 export function ResearchTable({ items }: { items: ResearchItem[] }) {
-  const [, setParams] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const [sorting, setSorting] = useState<SortingState>([])
   const [search, setSearch] = useState("")
   const [showArchived, setShowArchived] = useState(false)
   const [endingSoon, setEndingSoon] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedPrimaryCategory, setSelectedPrimaryCategory] = useState("all")
+  const [selectedSubCategory, setSelectedSubCategory] = useState("all")
   const [selectedTag, setSelectedTag] = useState("all")
+
+  const viewMode = (params.get("view") as 'table' | 'grid') || 'table'
+  const setViewMode = (mode: 'table' | 'grid') => {
+    setParams((p) => {
+      const next = new URLSearchParams(p)
+      next.set("view", mode)
+      return next
+    })
+  }
 
   const toggleWatch = useToggleWatch()
   const toggleArchive = useToggleArchive()
   const scanItems = useScanItems()
   const reevaluateItems = useReevaluateItems()
 
-  const categories = useMemo(() => {
+  const primaryCategories = useMemo(() => {
     const cats = new Set<string>()
     items.forEach(i => {
-      if (i.category) cats.add(i.category)
+      if (i.category && typeof i.category === 'string') {
+        const primary = i.category.split(" > ")[0]?.trim()
+        if (primary) cats.add(primary)
+      }
     })
     return Array.from(cats).sort()
   }, [items])
 
+  const subCategories = useMemo(() => {
+    const cats = new Set<string>()
+    items.forEach(i => {
+      if (i.category && typeof i.category === 'string') {
+        const parts = i.category.split(" > ")
+        if (parts.length > 1) {
+          const primary = parts[0]?.trim()
+          const sub = parts[1]?.trim()
+          if (sub && (selectedPrimaryCategory === "all" || primary === selectedPrimaryCategory)) {
+            cats.add(sub)
+          }
+        }
+      }
+    })
+    return Array.from(cats).sort()
+  }, [items, selectedPrimaryCategory])
+
   const tags = useMemo(() => {
     const allTags = new Set<string>()
     items.forEach(i => {
-      if (Array.isArray(i.tags)) i.tags.forEach(t => allTags.add(t))
+      if (Array.isArray(i.tags)) {
+        i.tags.forEach(t => {
+          if (typeof t === 'string') {
+            const trimmed = t.trim()
+            if (trimmed) allTags.add(trimmed)
+          }
+        })
+      }
     })
     return Array.from(allTags).sort()
   }, [items])
@@ -74,8 +112,11 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
       const cutoff = Date.now() + 24 * 3600 * 1000
       data = data.filter((i) => i.end_time && new Date(i.end_time).getTime() < cutoff)
     }
-    if (selectedCategory !== "all") {
-      data = data.filter((i) => i.category === selectedCategory)
+    if (selectedPrimaryCategory !== "all") {
+      data = data.filter((i) => i.category?.split(" > ")[0] === selectedPrimaryCategory)
+    }
+    if (selectedSubCategory !== "all") {
+      data = data.filter((i) => i.category?.split(" > ")[1] === selectedSubCategory)
     }
     if (selectedTag !== "all") {
       data = data.filter((i) => Array.isArray(i.tags) && i.tags.includes(selectedTag))
@@ -91,7 +132,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
       )
     }
     return data
-  }, [items, showArchived, endingSoon, search, selectedCategory, selectedTag])
+  }, [items, showArchived, endingSoon, search, selectedPrimaryCategory, selectedSubCategory, selectedTag])
 
   const handleScan = () => {
     scanItems.mutate(undefined, {
@@ -107,7 +148,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
     })
   }
 
-  const openItem = (item: ResearchItem, tab?: string) => {
+  const openItem = useCallback((item: ResearchItem, tab?: string) => {
     setParams((p) => {
       const next = new URLSearchParams(p)
       next.set("item", String(item.id))
@@ -115,7 +156,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
       else next.delete("tab")
       return next
     })
-  }
+  }, [setParams])
 
   const columns = useMemo<ColumnDef<ResearchItem>[]>(
     () => [
@@ -211,7 +252,7 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
         ),
       },
     ],
-    [toggleWatch, toggleArchive]
+    [toggleWatch, toggleArchive, openItem]
   )
 
   const table = useReactTable({
@@ -233,62 +274,77 @@ export function ResearchTable({ items }: { items: ResearchItem[] }) {
         onShowArchivedChange={setShowArchived}
         endingSoon={endingSoon}
         onEndingSoonChange={setEndingSoon}
-        categories={categories}
+        primaryCategories={primaryCategories}
+        subCategories={subCategories}
         tags={tags}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
+        selectedPrimaryCategory={selectedPrimaryCategory}
+        onPrimaryCategoryChange={(v) => {
+          setSelectedPrimaryCategory(v)
+          setSelectedSubCategory("all")
+        }}
+        selectedSubCategory={selectedSubCategory}
+        onSubCategoryChange={setSelectedSubCategory}
         selectedTag={selectedTag}
         onTagChange={setSelectedTag}
         onScan={handleScan}
         onReevaluate={handleReevaluate}
         isScanning={scanItems.isPending}
         isReevaluating={reevaluateItems.isPending}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((header) => (
-                  <TableHead key={header.id} style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row, i) => (
-                <motion.tr
-                  key={row.id}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.02, duration: 0.12 }}
-                  className="border-b transition-colors hover:bg-muted/50 cursor-default"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-2">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+      {viewMode === 'table' ? (
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  {hg.headers.map((header) => (
+                    <TableHead key={header.id} style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   ))}
-                </motion.tr>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length}>
-                  <EmptyState title="No items" description="Try adjusting your filters" />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row, i) => (
+                  <motion.tr
+                    key={row.id}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.02, duration: 0.12 }}
+                    className="border-b transition-colors hover:bg-muted/50 cursor-default"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-2">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </motion.tr>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length}>
+                    <EmptyState title="No items" description="Try adjusting your filters" />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <ResearchGrid
+          items={filtered}
+          onOpenItem={(i) => openItem(i)}
+          onWatch={(i) => toggleWatch.mutate(i.id)}
+        />      )}
 
-      <ItemDetailSheet items={filtered} />
+      <ItemDetailModal items={filtered} />
     </>
   )
 }

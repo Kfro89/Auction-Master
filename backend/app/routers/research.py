@@ -55,9 +55,14 @@ def serialize_research_item(item: ResearchItem) -> dict:
         "category": item.category,
         "product_name": item.product_name,
         "condition": item.condition,
-        "tags": item.tags,
+        "tags": item.tags if isinstance(item.tags, list) else [],
         "is_watched": getattr(item, 'is_watched', False),
         "is_archived": getattr(item, 'is_archived', False),
+        "vin": item.vin,
+        "vehicle_year": item.vehicle_year,
+        "vehicle_make": item.vehicle_make,
+        "vehicle_model": item.vehicle_model,
+        "vehicle_trim": item.vehicle_trim,
         "valuation": None
     }
     

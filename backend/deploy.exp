@@ -1,6 +1,6 @@
 #!/usr/bin/expect -f
 set timeout -1
-spawn ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no kevin@192.168.0.16 "export PATH=/usr/local/bin:/opt/homebrew/bin:\$PATH; cd '/Volumes/10TB HDD 2/Antigravity Workspace/Auction Master' && docker compose up --build -d || docker-compose up --build -d"
+spawn ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no kevin@192.168.0.16 "export PATH=/usr/local/bin:/opt/homebrew/bin:\$PATH; cd ~/Docker/AuctionMaster && docker compose up --build -V -d || docker-compose up --build -V -d"
 expect {
     "*assword:*" {
         send "password\r"

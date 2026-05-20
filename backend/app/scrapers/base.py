@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+from app.schemas.scraping import ScrapedAuction, ScrapedLot, ScrapedBid
 
 class BaseScraper(ABC):
     """
@@ -8,18 +9,18 @@ class BaseScraper(ABC):
     """
 
     @abstractmethod
-    async def discover_active_auctions(self) -> List[Dict[str, Any]]:
+    async def discover_active_auctions(self) -> List[ScrapedAuction]:
         """
         Discover active or upcoming auctions on the platform.
-        Returns a list of standardized dictionary representations of auctions.
+        Returns a list of standardized ScrapedAuction models.
         """
         pass
 
     @abstractmethod
-    async def fetch_auction_lots(self, auction_id: str) -> List[Dict[str, Any]]:
+    async def fetch_auction_lots(self, auction_id: str) -> Tuple[ScrapedAuction, List[ScrapedLot]]:
         """
         Fetch all lots for a given auction.
-        Returns a list of standardized dictionary representations of items.
+        Returns a tuple of (ScrapedAuction, List[ScrapedLot]).
         """
         pass
 
@@ -45,3 +46,15 @@ class BaseScraper(ABC):
         Returns a dictionary with status, message, and any updated bid details.
         """
         raise NotImplementedError("Bidding not implemented for this platform.")
+        
+    async def fetch_my_bids(self, buyer_id: str = None) -> List[ScrapedBid]:
+        """
+        Fetch current active bids for the user.
+        """
+        raise NotImplementedError("fetch_my_bids not implemented for this scraper")
+
+    async def fetch_closed_bids(self, buyer_id: str = None) -> List[ScrapedBid]:
+        """
+        Fetch recently ended bids for the user to verify win/loss status.
+        """
+        raise NotImplementedError("fetch_closed_bids not implemented for this scraper")

@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn rsync -avz -e "ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no" kevin@192.168.0.16:~/Docker/AuctionMaster/backend/alembic/versions/ backend/alembic/versions/
+expect {
+    "*assword:*" {
+        send "password\r"
+        exp_continue
+    }
+    eof
+}
