@@ -1,11 +1,17 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/api"
 import type { ResearchItem } from "@/lib/types"
 
-export function useWatchlist() {
-  return useQuery({
-    queryKey: ["watchlist"],
-    queryFn: () => apiFetch<ResearchItem[]>("/api/research/watchlist"),
+export function useWatchlist(limit = 50) {
+  return useInfiniteQuery({
+    queryKey: ["watchlist", { limit }],
+    queryFn: ({ pageParam = 0 }) => 
+      apiFetch<ResearchItem[]>(`/api/research/watchlist?limit=${limit}&offset=${pageParam}`),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < limit) return undefined
+      return allPages.length * limit
+    },
   })
 }
 
@@ -15,12 +21,18 @@ export function useUnwatch() {
     mutationFn: (id: number) => apiFetch<ResearchItem>(`/api/research/${id}/toggle-watch`, { method: "POST" }),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["watchlist"] })
-      const prev = qc.getQueryData<ResearchItem[]>(["watchlist"])
-      qc.setQueryData<ResearchItem[]>(["watchlist"], (old) => old?.filter((i) => i.id !== id))
+      const prev = qc.getQueriesData<InfiniteData<ResearchItem[]>>({ queryKey: ["watchlist"] })
+      qc.setQueriesData<InfiniteData<ResearchItem[]>>({ queryKey: ["watchlist"] }, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map(page => page.filter(i => i.id !== id))
+        }
+      })
       return { prev }
     },
     onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["watchlist"], ctx.prev)
+      ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data))
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["watchlist"] })
